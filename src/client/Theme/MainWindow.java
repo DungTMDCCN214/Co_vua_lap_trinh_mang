@@ -58,8 +58,70 @@ public final class MainWindow extends JFrame {
     }
 
     public boolean confirm(String title, String message) {
-        return JOptionPane.showConfirmDialog(
-                this, message, title, JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE
-        ) == JOptionPane.YES_OPTION;
+        JDialog dialog = new JDialog(this, title, Dialog.ModalityType.APPLICATION_MODAL);
+        dialog.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+        dialog.setResizable(false);
+
+        JPanel content = new JPanel(new BorderLayout(0, 20));
+        content.setBackground(ThemeStyle.PAPER);
+        content.setBorder(ThemeStyle.cardBorder(22, 24, 20, 24));
+
+        JLabel icon = new JLabel("!", SwingConstants.CENTER);
+        icon.setForeground(ThemeStyle.DANGER);
+        icon.setFont(new Font("SansSerif", Font.BOLD, 24));
+        icon.setPreferredSize(new Dimension(48, 48));
+
+        JPanel copy = new JPanel(new BorderLayout(0, 6));
+        copy.setOpaque(false);
+        JLabel heading = new JLabel("Xác nhận đầu hàng");
+        ThemeStyle.heading(heading, 18);
+        JTextArea description = new JTextArea(message);
+        description.setEditable(false);
+        description.setFocusable(false);
+        description.setLineWrap(true);
+        description.setWrapStyleWord(true);
+        description.setOpaque(false);
+        description.setBorder(BorderFactory.createEmptyBorder());
+        description.setForeground(ThemeStyle.MUTED);
+        description.setFont(new Font("SansSerif", Font.PLAIN, 13));
+        description.setRows(2);
+        copy.add(heading, BorderLayout.NORTH);
+        copy.add(description, BorderLayout.CENTER);
+
+        JPanel messagePanel = new JPanel(new BorderLayout(14, 0));
+        messagePanel.setOpaque(false);
+        messagePanel.add(icon, BorderLayout.WEST);
+        messagePanel.add(copy, BorderLayout.CENTER);
+
+        JButton cancelButton = new JButton("Tiếp tục chơi");
+        JButton confirmButton = new JButton("Đầu hàng");
+        ThemeStyle.button(cancelButton, false);
+        ThemeStyle.dangerButton(confirmButton);
+
+        boolean[] confirmed = {false};
+        cancelButton.addActionListener(event -> dialog.dispose());
+        confirmButton.addActionListener(event -> {
+            confirmed[0] = true;
+            dialog.dispose();
+        });
+
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        actions.setOpaque(false);
+        actions.add(cancelButton);
+        actions.add(confirmButton);
+
+        content.add(messagePanel, BorderLayout.CENTER);
+        content.add(actions, BorderLayout.SOUTH);
+        dialog.setContentPane(content);
+        dialog.getRootPane().setDefaultButton(cancelButton);
+        dialog.getRootPane().registerKeyboardAction(
+                event -> dialog.dispose(),
+                KeyStroke.getKeyStroke("ESCAPE"),
+                JComponent.WHEN_IN_FOCUSED_WINDOW
+        );
+        dialog.pack();
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true);
+        return confirmed[0];
     }
 }

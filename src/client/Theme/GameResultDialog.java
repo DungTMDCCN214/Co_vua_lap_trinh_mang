@@ -18,9 +18,7 @@ final class GameResultDialog extends JDialog {
 
         JPanel content = new JPanel(new BorderLayout(0, 16));
         content.setBackground(ThemeStyle.PAPER);
-        content.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(ThemeStyle.LINE),
-                new EmptyBorder(18, 18, 18, 18)));
+        content.setBorder(ThemeStyle.cardBorder(18, 18, 18, 18));
 
         JPanel banner = new JPanel(new BorderLayout(14, 0));
         banner.setBackground(accent);

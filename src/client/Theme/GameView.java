@@ -38,9 +38,7 @@ public final class GameView extends JPanel {
 
         JPanel boardFrame = new JPanel(new BorderLayout());
         boardFrame.setBackground(ThemeStyle.PANEL);
-        boardFrame.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(ThemeStyle.LINE),
-                new EmptyBorder(12, 12, 12, 12)));
+        boardFrame.setBorder(ThemeStyle.cardBorder(12, 12, 12, 12));
         boardFrame.add(board, BorderLayout.CENTER);
         boardFrame.setMinimumSize(new Dimension(300, 300));
 
@@ -61,9 +59,7 @@ public final class GameView extends JPanel {
         chatInputRow.add(sendButton, BorderLayout.EAST);
         JPanel chatCard = new JPanel(new BorderLayout(8, 8));
         chatCard.setBackground(ThemeStyle.PANEL);
-        chatCard.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(ThemeStyle.LINE),
-                new EmptyBorder(12, 12, 12, 12)));
+        chatCard.setBorder(ThemeStyle.cardBorder(12, 12, 12, 12));
         JLabel chatTitle = new JLabel("TRÒ CHUYỆN");
         chatTitle.setForeground(ThemeStyle.MUTED);
         chatTitle.setFont(new Font("SansSerif", Font.BOLD, 10));

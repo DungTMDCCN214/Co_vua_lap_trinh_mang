@@ -94,9 +94,7 @@ public final class LobbyView extends JPanel {
         dataTop.add(dataHeader, BorderLayout.NORTH);
         dataTop.add(searchPanel, BorderLayout.SOUTH);
         dataPanel.setBackground(ThemeStyle.PANEL);
-        dataPanel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(ThemeStyle.LINE),
-                new EmptyBorder(16, 18, 16, 18)));
+        dataPanel.setBorder(ThemeStyle.cardBorder(16, 18, 16, 18));
         dataPanel.add(dataTop, BorderLayout.NORTH);
         dataPanel.add(leaderboardScroll, BorderLayout.CENTER);
         dataPanel.setVisible(false);
@@ -179,9 +177,7 @@ public final class LobbyView extends JPanel {
     private JPanel createRankRow(RankEntry entry) {
         JPanel row = new JPanel(new BorderLayout(14, 0));
         row.setBackground(Color.WHITE);
-        row.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(ThemeStyle.LINE),
-                new EmptyBorder(10, 12, 10, 14)));
+        row.setBorder(ThemeStyle.cardBorder(10, 12, 10, 14));
         row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 74));
 
         Color rankColor = entry.rank <= RANK_COLORS.length
@@ -241,9 +237,7 @@ public final class LobbyView extends JPanel {
     private JPanel createProfileCard() {
         JPanel card = new JPanel(new BorderLayout(18, 22));
         card.setBackground(Color.WHITE);
-        card.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(ThemeStyle.LINE),
-                new EmptyBorder(24, 24, 24, 24)));
+        card.setBorder(ThemeStyle.cardBorder(24, 24, 24, 24));
 
         String initials = profileName.isEmpty() ? "?" :
                 profileName.substring(0, 1).toUpperCase();
