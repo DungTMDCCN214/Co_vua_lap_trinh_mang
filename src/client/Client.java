@@ -24,17 +24,28 @@ public class Client {
 
     public Client(Listener listener) { this.listener = listener; }
 
-    /** Kết nối tới Server (timeout 5s), gửi LOGIN và khởi động luồng nhận dữ liệu. */
-    public void connect(String host, int port, String username) throws IOException {
+    /** Kết nối tới Server (timeout 5s) và khởi động luồng nhận dữ liệu. */
+    public void connect(String host, int port) throws IOException {
         socket = new Socket();
         socket.connect(new InetSocketAddress(host, port), 5000);
         in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
         out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
         connected = true;
-        send(Protocol.build(Protocol.LOGIN, username));
         Thread t = new Thread(this::listen, "client-listener");
         t.setDaemon(true);
         t.start();
+    }
+
+    public void loginGuest(String username) {
+        send(Protocol.build(Protocol.LOGIN, username));
+    }
+
+    public void loginAccount(String username, String password) {
+        send(Protocol.build(Protocol.LOGIN, username, password));
+    }
+
+    public void registerAccount(String username, String password) {
+        send(Protocol.build(Protocol.REGISTER, username, password));
     }
 
     /** Luồng nền: đọc từng dòng từ Server, chuyển lên EDT để cập nhật GUI an toàn. */
