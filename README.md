@@ -1,11 +1,11 @@
 # Cờ Vua Online - Bài tập lớn Lập trình mạng
 
 ## Biên dịch
-    mkdir out
-    javac -encoding UTF-8 -d out src/protocol/*.java src/server/*.java src/client/*.java
+    rm -rf out && mkdir out
+    
 
 ## Chạy
-    java -cp "out;src\lib\sqlite-jdbc-3.46.1.3.jar" server.Server 5555      # Server (cổng mặc định 5555)
+    javac -encoding UTF-8 -d out src/protocol/*.java src/server/*.java src/client/*.java src/client/Theme/*.java
     java -cp out client.MainFrame        # Client (chạy 2 lần để có 2 người chơi)
 
 ## Giao thức (dòng text, phân tách bằng '|')
