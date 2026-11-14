@@ -1,65 +1,84 @@
 package client;
 
-import protocol.Protocol;
+import client.Theme.LoginView;
 
-import javax.swing.*;
-import java.awt.*;
-
-/** Màn hình 1: nhập IP Server, Port và tên người chơi. */
-public class LoginPanel extends JPanel {
-    private final JTextField hostField = new JTextField("localhost", 15);
-    private final JTextField portField = new JTextField(String.valueOf(Protocol.DEFAULT_PORT), 15);
-    private final JTextField nameField = new JTextField(15);
-    private final JButton connectBtn = new JButton("Kết nối");
-    private final JLabel errorLabel = new JLabel(" ");
+/** Login and registration input handling; visual components live under Theme. */
+public final class LoginPanel implements LoginView.Listener {
+    private final MainFrame frame;
+    private final LoginView view = new LoginView();
 
     public LoginPanel(MainFrame frame) {
-        setLayout(new GridBagLayout());
-        setPreferredSize(new Dimension(820, 600));
-        GridBagConstraints gc = new GridBagConstraints();
-        gc.insets = new Insets(6, 6, 6, 6);
-        gc.fill = GridBagConstraints.HORIZONTAL;
-
-        JLabel title = new JLabel("CỜ VUA ONLINE", SwingConstants.CENTER);
-        title.setFont(title.getFont().deriveFont(Font.BOLD, 26f));
-        gc.gridx = 0; gc.gridy = 0; gc.gridwidth = 2;
-        add(title, gc);
-
-        gc.gridwidth = 1;
-        addRow(gc, 1, "IP Server:", hostField);
-        addRow(gc, 2, "Port:", portField);
-        addRow(gc, 3, "Tên người chơi:", nameField);
-
-        gc.gridx = 0; gc.gridy = 4; gc.gridwidth = 2;
-        add(connectBtn, gc);
-        errorLabel.setForeground(Color.RED);
-        errorLabel.setHorizontalAlignment(SwingConstants.CENTER);
-        gc.gridy = 5;
-        add(errorLabel, gc);
-
-        connectBtn.addActionListener(e -> {
-            try {
-                int port = Integer.parseInt(portField.getText().trim());
-                String name = nameField.getText().trim();
-                if (name.isEmpty()) { showError("Vui lòng nhập tên người chơi"); return; }
-                errorLabel.setText(" ");
-                frame.connect(hostField.getText().trim(), port, name);
-            } catch (NumberFormatException ex) {
-                showError("Port phải là số");
-            }
-        });
-        getRootPane(); // không bắt buộc, giữ để rõ ràng
+        this.frame = frame;
+        view.setListener(this);
     }
 
-    private void addRow(GridBagConstraints gc, int row, String label, JComponent field) {
-        gc.gridx = 0; gc.gridy = row; add(new JLabel(label), gc);
-        gc.gridx = 1; add(field, gc);
+    public java.awt.Component view() {
+        return view;
+    }
+
+    @Override
+    public void onLogin(String host, String portText, String username, String password) {
+        Integer port = parsePort(portText);
+        if (port == null) return;
+        String name = username.trim();
+        if (name.isEmpty()) {
+            view.showError("Vui lòng nhập tên người chơi.");
+            return;
+        }
+        if (password.isEmpty()) {
+            frame.connect(host.trim(), port, name);
+        } else {
+            frame.connect(host.trim(), port, name, password, true);
+        }
+    }
+
+    @Override
+    public void onRegister(String host, String portText, String username, String password) {
+        Integer port = parsePort(portText);
+        if (port == null) return;
+        String name = username.trim();
+        if (name.isEmpty()) {
+            view.showRegisterError("Vui lòng nhập tên tài khoản.");
+            return;
+        }
+        if (password.length() < 6 || password.length() > 64) {
+            view.showRegisterError("Mật khẩu phải có từ 6 đến 64 ký tự.");
+            return;
+        }
+        frame.register(host.trim(), port, name, password);
+    }
+
+    private Integer parsePort(String text) {
+        try {
+            int port = Integer.parseInt(text.trim());
+            if (port < 1 || port > 65535) {
+                view.showError("Port phải nằm trong khoảng 1 đến 65535.");
+                return null;
+            }
+            return port;
+        } catch (NumberFormatException exception) {
+            view.showError("Port phải là số.");
+            return null;
+        }
     }
 
     public void setBusy(boolean busy) {
-        connectBtn.setEnabled(!busy);
-        connectBtn.setText(busy ? "Đang kết nối..." : "Kết nối");
+        view.setBusy(busy);
     }
 
-    public void showError(String msg) { errorLabel.setText(msg); }
+    public void showLoginPage() {
+        view.showLoginPage();
+    }
+
+    public void showError(String message) {
+        view.showError(message);
+    }
+
+    public void showRegisterError(String message) {
+        view.showRegisterError(message);
+    }
+
+    public void showSuccess(String message) {
+        view.showSuccess(message);
+    }
 }
