@@ -198,14 +198,14 @@ public final class LoginView extends JPanel {
     }
 
     private void fireLogin() {
-        if (listener != null) {
+        if (listener != null && loginButton.isEnabled()) { // chặn Enter khi đang kết nối
             listener.onLogin(serverHost.getText(), serverPort.getText(),
                     loginUsername.getText(), new String(loginPassword.getPassword()));
         }
     }
 
     private void fireRegister() {
-        if (listener != null) {
+        if (listener != null && registerButton.isEnabled()) {
             listener.onRegister(serverHost.getText(), serverPort.getText(),
                     registerUsername.getText(), new String(registerPassword.getPassword()));
         }

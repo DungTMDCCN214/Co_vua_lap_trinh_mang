@@ -17,28 +17,31 @@ public class Client {
     }
 
     private final Listener listener;
-    private Socket socket;
+    private final Socket socket = new Socket();
     private BufferedReader in;
     private PrintWriter out;
-    private volatile boolean connected;
+    private volatile boolean connected, closed;
 
     public Client(Listener listener) { this.listener = listener; }
 
     /** Kết nối tới Server (timeout 5s) và khởi động luồng nhận dữ liệu. */
     public void connect(String host, int port) throws IOException {
-        socket = new Socket();
-        socket.connect(new InetSocketAddress(host, port), 5000);
-        in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
-        out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
+        try {
+            socket.connect(new InetSocketAddress(host, port), 5000);
+            if (closed) throw new IOException("Đã hủy kết nối");
+            in = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+            out = new PrintWriter(new OutputStreamWriter(socket.getOutputStream(), StandardCharsets.UTF_8), true);
+        } catch (IOException e) {
+            close();
+            throw e;
+        }
         connected = true;
         Thread t = new Thread(this::listen, "client-listener");
         t.setDaemon(true);
         t.start();
     }
 
-    public void loginGuest(String username) {
-        send(Protocol.build(Protocol.LOGIN, username));
-    }
+    public void loginGuest(String username) { send(Protocol.build(Protocol.LOGIN, username)); }
 
     public void loginAccount(String username, String password) {
         send(Protocol.build(Protocol.LOGIN, username, password));
@@ -48,31 +51,30 @@ public class Client {
         send(Protocol.build(Protocol.REGISTER, username, password));
     }
 
-    /** Luồng nền: đọc từng dòng từ Server, chuyển lên EDT để cập nhật GUI an toàn. */
+    /** Luồng nền: đọc từng dòng từ Server, chuyển lên EDT; bỏ qua mọi thứ sau khi đã chủ động close(). */
     private void listen() {
         try {
             String line;
             while ((line = in.readLine()) != null) {
                 String[] parts = Protocol.parse(line);
-                SwingUtilities.invokeLater(() -> listener.onMessage(parts));
+                SwingUtilities.invokeLater(() -> { if (!closed) listener.onMessage(parts); });
             }
-        } catch (IOException e) {
-            // Mất kết nối đột ngột -> xử lý ở finally, không để ứng dụng crash
+        } catch (IOException | RuntimeException ignored) {
+            // Mất kết nối đột ngột -> xử lý ở finally
         } finally {
-            if (connected) { // chỉ báo nếu không phải do mình chủ động đóng
-                connected = false;
-                SwingUtilities.invokeLater(listener::onDisconnected);
-            }
+            connected = false;
+            if (!closed) SwingUtilities.invokeLater(() -> { if (!closed) listener.onDisconnected(); });
         }
     }
 
     public synchronized void send(String msg) {
-        if (out != null && connected) out.println(msg);
+        if (connected && !closed) out.println(msg);
     }
 
     /** Đóng kết nối chủ động (không kích hoạt onDisconnected). */
     public void close() {
+        closed = true;
         connected = false;
-        try { if (socket != null) socket.close(); } catch (IOException ignored) {}
+        try { socket.close(); } catch (IOException ignored) {}
     }
 }

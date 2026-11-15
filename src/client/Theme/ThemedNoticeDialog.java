@@ -29,8 +29,8 @@ final class ThemedNoticeDialog extends JDialog {
         copy.setOpaque(false);
 
         JLabel heading = new JLabel("<html><div style='font-size:13pt; font-weight:bold; color:#2c2c2c; margin-bottom:4px;'>"
-                + headingText + "</div><div style='font-size:10pt; color:#6b7280; width:250px;'>"
-                + messageText.replace("\n", "<br>") + "</div></html>");
+                + ThemeStyle.html(headingText) + "</div><div style='font-size:10pt; color:#6b7280; width:250px;'>"
+                + ThemeStyle.html(messageText) + "</div></html>");
         heading.setOpaque(false);
 
         copy.add(heading, BorderLayout.NORTH);

@@ -141,6 +141,13 @@ public final class MainWindow extends JFrame {
             if (restoreBounds != null) setBounds(restoreBounds);
         } else {
             restoreBounds = getBounds();
+            GraphicsConfiguration gc = getGraphicsConfiguration(); // không che thanh taskbar
+            if (gc != null) {
+                Rectangle b = gc.getBounds();
+                Insets in = Toolkit.getDefaultToolkit().getScreenInsets(gc);
+                setMaximizedBounds(new Rectangle(in.left, in.top,
+                        b.width - in.left - in.right, b.height - in.top - in.bottom));
+            }
             setExtendedState(Frame.MAXIMIZED_BOTH);
         }
         updateMaximizeButton();
@@ -240,16 +247,20 @@ public final class MainWindow extends JFrame {
         ThemedNoticeDialog.showNotice(this, title, title, message, false);
     }
 
-    public void showGameResult(String result, String reason, String details) {
-        new GameResultDialog(this, result, reason, details).setVisible(true);
+    /** Hiện kết quả ván; trả về true nếu người chơi chọn "Về sảnh". */
+    public boolean showGameResult(String result, String reason, String details) {
+        GameResultDialog dialog = new GameResultDialog(this, result, reason, details);
+        dialog.setVisible(true);
+        return dialog.toLobby();
     }
 
     public void showError(String title, String message) {
         ThemedNoticeDialog.showNotice(this, title, "Thông báo lỗi", message, true);
     }
 
-    public boolean confirm(String title, String message) {
-        return confirmSurrender();
+    /** Đóng mọi hộp thoại đang mở (khi ván kết thúc / mất kết nối) để không bị kẹt hộp thoại cũ. */
+    public void closeDialogs() {
+        for (Window w : getOwnedWindows()) if (w instanceof JDialog && w.isShowing()) w.dispose();
     }
 
     public boolean confirmSurrender() {
@@ -286,8 +297,8 @@ public final class MainWindow extends JFrame {
         JPanel copy = new JPanel(new BorderLayout(0, 4));
         copy.setOpaque(false);
         JLabel heading = new JLabel("<html><div style='font-size:14pt; font-weight:bold; color:#2c2c2c; margin-bottom:4px;'>"
-                + headingText + "</div><div style='font-size:10pt; color:#6b7280; width:250px;'>"
-                + message.replace("\n", "<br>") + "</div></html>");
+                + ThemeStyle.html(headingText) + "</div><div style='font-size:10pt; color:#6b7280; width:250px;'>"
+                + ThemeStyle.html(message) + "</div></html>");
         heading.setOpaque(false);
         copy.add(heading, BorderLayout.NORTH);
 

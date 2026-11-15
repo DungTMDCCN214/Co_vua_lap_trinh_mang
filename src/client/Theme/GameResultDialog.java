@@ -10,6 +10,8 @@ final class GameResultDialog extends JDialog {
     private static final Color LOSS = new Color(145, 71, 61);
     private static final Color DRAW = new Color(151, 111, 48);
 
+    private boolean toLobby;
+
     GameResultDialog(Window owner, String result, String reason, String details) {
         super(owner, "Kết quả ván đấu", ModalityType.APPLICATION_MODAL);
         Color accent = resultColor(result);
@@ -67,11 +69,18 @@ final class GameResultDialog extends JDialog {
         detailsCard.add(label, BorderLayout.NORTH);
         detailsCard.add(detailText, BorderLayout.CENTER);
 
+        JButton viewButton = new JButton("Xem bàn cờ");
         JButton returnButton = new JButton("Về sảnh");
+        ThemeStyle.button(viewButton, false);
         ThemeStyle.button(returnButton, true);
-        returnButton.addActionListener(event -> dispose());
-        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        viewButton.addActionListener(event -> dispose());
+        returnButton.addActionListener(event -> {
+            toLobby = true;
+            dispose();
+        });
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         actions.setOpaque(false);
+        actions.add(viewButton);
         actions.add(returnButton);
 
         content.add(banner, BorderLayout.NORTH);
@@ -82,6 +91,9 @@ final class GameResultDialog extends JDialog {
         setSize(470, 340);
         setLocationRelativeTo(owner);
     }
+
+    /** true nếu người chơi bấm "Về sảnh" (đóng bằng nút khác/X/ESC = ở lại xem bàn cờ). */
+    boolean toLobby() { return toLobby; }
 
     private static Color resultColor(String result) {
         if ("WIN".equals(result)) return WIN;

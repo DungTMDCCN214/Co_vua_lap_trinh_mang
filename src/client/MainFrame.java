@@ -1,13 +1,14 @@
 package client;
 
-import client.Theme.MainWindow;
 import client.Theme.DesktopApp;
+import client.Theme.MainWindow;
 import protocol.Protocol;
 
 import java.io.IOException;
+import java.util.function.Consumer;
 
 /** Application coordinator: network events, client actions, and screen state. */
-public final class MainFrame implements Client.Listener {
+public final class MainFrame {
     private final LoginPanel login;
     private final LobbyPanel lobby;
     private final GamePanel game;
@@ -22,26 +23,13 @@ public final class MainFrame implements Client.Listener {
         window = new MainWindow(login.view(), lobby.view(), game.view(), this::exit);
     }
 
+    // ---------------------------------------------------------------- kết nối
+
     public void connect(String host, int port, String name, String password, boolean accountLogin) {
-        login.setBusy(true);
-        Client current = new Client(this);
-        client = current;
-        new Thread(() -> {
-            try {
-                current.connect(host, port);
-                if (accountLogin && password != null && !password.isEmpty()) {
-                    current.loginAccount(name, password);
-                } else {
-                    current.loginGuest(name);
-                }
-            } catch (IOException exception) {
-                DesktopApp.runOnUiThread(() -> {
-                    client = null;
-                    login.setBusy(false);
-                    login.showError("Không kết nối được server: " + exception.getMessage());
-                });
-            }
-        }, "connector").start();
+        start(host, port, c -> {
+            if (accountLogin && password != null && !password.isEmpty()) c.loginAccount(name, password);
+            else c.loginGuest(name);
+        }, login::showError);
     }
 
     public void connect(String host, int port, String name) {
@@ -49,21 +37,43 @@ public final class MainFrame implements Client.Listener {
     }
 
     public void register(String host, int port, String name, String password) {
+        start(host, port, c -> c.registerAccount(name, password), login::showRegisterError);
+    }
+
+    /** Tạo Client mới, kết nối ở luồng nền rồi chạy hành động đầu tiên (đăng nhập/đăng ký). */
+    private void start(String host, int port, Consumer<Client> firstAction, Consumer<String> onFail) {
         login.setBusy(true);
-        Client current = new Client(this);
-        client = current;
+        Client current = newClient();
         new Thread(() -> {
             try {
                 current.connect(host, port);
-                current.registerAccount(name, password);
-            } catch (IOException exception) {
+                firstAction.accept(current);
+            } catch (IOException | RuntimeException exception) {
                 DesktopApp.runOnUiThread(() -> {
-                    client = null;
+                    if (client != current) return; // kết nối này đã bị thay thế/đóng
+                    closeClient();
                     login.setBusy(false);
-                    login.showRegisterError("Không kết nối được server: " + exception.getMessage());
+                    onFail.accept("Không kết nối được server: " + exception.getMessage());
                 });
             }
         }, "connector").start();
+    }
+
+    /** Client mới gắn với callback chỉ có hiệu lực khi nó vẫn là kết nối hiện tại (bỏ qua tin của kết nối cũ). */
+    private Client newClient() {
+        closeClient();
+        Client[] self = new Client[1];
+        self[0] = new Client(new Client.Listener() {
+            @Override public void onMessage(String[] parts) { if (client == self[0]) handle(parts); }
+            @Override public void onDisconnected() { if (client == self[0]) handleDisconnect(); }
+        });
+        return client = self[0];
+    }
+
+    private void closeClient() {
+        Client current = client;
+        client = null;
+        if (current != null) current.close();
     }
 
     public void send(String message) {
@@ -71,9 +81,10 @@ public final class MainFrame implements Client.Listener {
         if (current != null) current.send(message);
     }
 
+    // ---------------------------------------------------------------- màn hình
+
     public void showLobby() {
-        lobby.setSearching(false);
-        lobby.onMatchFound();
+        lobby.onMatchFound(); // tắt hộp thoại mời + hủy trạng thái tìm trận
         window.showScreen(MainWindow.LOBBY);
     }
 
@@ -83,41 +94,42 @@ public final class MainFrame implements Client.Listener {
         window.showScreen(MainWindow.LOGIN);
     }
 
-    public boolean confirmSurrender() {
-        return window.confirmSurrender();
+    public boolean confirmSurrender() { return window.confirmSurrender(); }
+    public boolean confirmDrawOffer() { return window.confirmDrawOffer(); }
+    public boolean confirmAcceptDraw() { return window.confirmAcceptDraw(); }
+
+    /** @return true nếu người chơi chọn "Về sảnh" trong hộp thoại kết quả. */
+    public boolean showGameOverMessage(String result, String reason, String message) {
+        window.closeDialogs(); // đóng hộp thoại xin hòa/đầu hàng còn mở
+        return window.showGameResult(result, reason, message);
     }
 
-    public boolean confirmDrawOffer() {
-        return window.confirmDrawOffer();
-    }
+    public void showWindow() { window.showWindow(); }
 
-    public boolean confirmAcceptDraw() {
-        return window.confirmAcceptDraw();
-    }
+    // ---------------------------------------------------------------- xử lý gói tin
 
-    public void showGameOverMessage(String result, String reason, String message) {
-        window.showGameResult(result, reason, message);
-    }
-
-    @Override
-    public void onMessage(String[] parts) {
-        if (parts.length == 0) return;
-        switch (parts[0]) {
-            case Protocol.LOGIN_OK:
-                if (parts.length < 2) return;
-                Integer elo = parseOptionalInteger(parts, 2);
-                lobby.setUser(parts[1], elo);
-                if (elo != null) {
+    private void handle(String[] p) {
+        if (p.length == 0) return;
+        switch (p[0]) {
+            case Protocol.LOGIN_OK: {
+                if (p.length < 2) return;
+                Integer elo = p.length > 2 ? toInteger(p[2]) : null;
+                lobby.setUser(p[1], elo);
+                if (elo == null) {
+                    showLobby();
+                } else {
                     waitingForInitialLeaderboard = true;
                     send(Protocol.LEADERBOARD);
-                } else {
-                    showLobby();
+                    javax.swing.Timer timeout = new javax.swing.Timer(4000, e -> finishInitialLoad());
+                    timeout.setRepeats(false); // server không trả bảng xếp hạng thì vẫn vào sảnh
+                    timeout.start();
                 }
                 break;
+            }
             case Protocol.LOGIN_FAIL:
                 closeClient();
                 login.setBusy(false);
-                login.showError(parts.length > 1 ? parts[1] : "Đăng nhập thất bại.");
+                login.showError(arg(p, 1, "Đăng nhập thất bại."));
                 break;
             case Protocol.REGISTER_OK:
                 closeClient();
@@ -128,38 +140,35 @@ public final class MainFrame implements Client.Listener {
             case Protocol.REGISTER_FAIL:
                 closeClient();
                 login.setBusy(false);
-                login.showRegisterError(parts.length > 1 ? parts[1] : "Đăng ký thất bại.");
+                login.showRegisterError(arg(p, 1, "Đăng ký thất bại."));
                 break;
             case Protocol.WAITING:
                 lobby.setSearching(true);
                 break;
-            case Protocol.MATCH_FOUND:
-                if (parts.length < 3) return;
-                String opponentElo = parts.length > 3 ? parts[3] : "-";
-                boolean isBlitz = parts.length >= 5 && Protocol.BLITZ.equals(parts[4]);
-                int blitzSeconds = isBlitz && parts.length >= 6 ? parseIntegerOrDefault(parts[5], 300) : 0;
-                int incrementSeconds = isBlitz && parts.length >= 7 ? parseIntegerOrDefault(parts[6], 0) : 0;
+            case Protocol.MATCH_FOUND: {
+                if (p.length < 3) return;
+                boolean blitz = p.length >= 5 && Protocol.BLITZ.equals(p[4]);
+                int seconds = blitz ? toInt(arg(p, 5, "300"), 300) : 0;
+                int increment = blitz ? toInt(arg(p, 6, "0"), 0) : 0;
                 lobby.onMatchFound();
-                game.startGame(parts[1], parts[2].equals("WHITE"), opponentElo, isBlitz, blitzSeconds, incrementSeconds);
+                window.closeDialogs(); // đóng hộp thoại kết quả ván trước nếu còn mở
+                game.startGame(p[1], p[2].equals("WHITE"), arg(p, 3, "-"), blitz, seconds, increment);
                 window.showScreen(MainWindow.GAME);
                 break;
+            }
             case Protocol.MOVE:
-                if (parts.length >= 3) game.onMove(parts[1], parts[2]);
+                if (p.length >= 3) game.onMove(p[1], p[2]);
                 break;
             case Protocol.INVALID_MOVE:
-                game.onInvalidMove(parts.length > 1 ? parts[1] : "");
+                game.onInvalidMove(arg(p, 1, ""));
                 break;
             case Protocol.CHAT:
-                if (parts.length >= 2) game.addChat(parts[1], parts.length > 2 ? parts[2] : "");
+                if (p.length >= 2) game.addChat(p[1], arg(p, 2, ""));
                 break;
             case Protocol.CLOCK:
-                if (parts.length >= 5) {
+                if (p.length >= 5) {
                     try {
-                        long msWhite = Long.parseLong(parts[1]);
-                        long msBlack = Long.parseLong(parts[2]);
-                        boolean isWhiteTurn = "W".equalsIgnoreCase(parts[3]);
-                        boolean running = "1".equals(parts[4]);
-                        game.onClock(msWhite, msBlack, isWhiteTurn, running);
+                        game.onClock(Long.parseLong(p[1]), Long.parseLong(p[2]), "W".equalsIgnoreCase(p[3]), "1".equals(p[4]));
                     } catch (NumberFormatException ignored) {}
                 }
                 break;
@@ -170,117 +179,102 @@ public final class MainFrame implements Client.Listener {
                 game.onDrawDeclined();
                 break;
             case Protocol.DRAW_FAIL:
-                game.onDrawFailed(parts.length > 1 ? parts[1] : "Yêu cầu hòa bị từ chối.");
+                game.onDrawFailed(arg(p, 1, "Yêu cầu hòa bị từ chối."));
                 break;
             case Protocol.ONLINE_LIST:
-                lobby.showOnlineList(parts);
+                lobby.showOnlineList(p);
                 break;
             case Protocol.INVITE:
-                if (parts.length >= 3) {
-                    String inviter = parts[1];
-                    String inviterElo = parts[2];
-                    boolean isBlitzInvite = parts.length >= 4 && Protocol.BLITZ.equals(parts[3]);
-                    lobby.onInviteReceived(inviter, inviterElo, isBlitzInvite);
-                }
+                if (p.length >= 3) lobby.onInviteReceived(p[1], p[2], p.length >= 4 && Protocol.BLITZ.equals(p[3]));
                 break;
             case Protocol.INVITE_SENT:
-                lobby.onInviteSent(parts.length > 1 ? parts[1] : "");
+                lobby.onInviteSent(arg(p, 1, ""));
                 break;
             case Protocol.INVITE_DECLINED:
-                lobby.onInviteDeclined(parts.length > 1 ? parts[1] : "");
+                lobby.onInviteDeclined(arg(p, 1, ""));
                 break;
             case Protocol.INVITE_CANCELLED:
-                lobby.onInviteCancelled(parts.length > 1 ? parts[1] : "");
+                lobby.onInviteCancelled(arg(p, 1, ""));
                 break;
             case Protocol.INVITE_EXPIRED:
-                lobby.onInviteExpired(parts.length > 1 ? parts[1] : "");
+                lobby.onInviteExpired(arg(p, 1, ""));
                 break;
             case Protocol.INVITE_FAIL:
-                lobby.onInviteFailed(parts.length > 1 ? parts[1] : "Không thể mời đấu.");
+                lobby.onInviteFailed(arg(p, 1, "Không thể mời đấu."));
                 break;
             case Protocol.GAME_OVER:
-                handleGameOver(parts);
+                handleGameOver(p);
                 break;
             case Protocol.LEADERBOARD:
-                lobby.showLeaderboard(parts);
-                if (waitingForInitialLeaderboard) {
-                    waitingForInitialLeaderboard = false;
-                    showLobby();
-                }
+                lobby.showLeaderboard(p);
+                finishInitialLoad();
                 break;
             case Protocol.PROFILE:
-                handleProfile(parts);
+                handleProfile(p);
                 break;
             case Protocol.ERROR:
-                if (waitingForInitialLeaderboard) {
-                    waitingForInitialLeaderboard = false;
-                    showLobby();
-                }
-                window.showError("Lỗi", parts.length > 1 ? parts[1] : "Lỗi không xác định.");
+                finishInitialLoad();
+                window.showError("Lỗi", arg(p, 1, "Lỗi không xác định."));
                 break;
             default:
                 break;
         }
     }
 
-    private void handleGameOver(String[] parts) {
-        if (parts.length < 2) return;
-        String reason = parts.length > 2 ? parts[2] : "";
-        if (parts.length >= 5) {
-            Integer newElo = parseInteger(parts[4]);
+    /** Vào sảnh sau khi đã (hoặc không thể) tải bảng xếp hạng đầu tiên. */
+    private void finishInitialLoad() {
+        if (!waitingForInitialLeaderboard) return;
+        waitingForInitialLeaderboard = false;
+        showLobby();
+    }
+
+    private void handleGameOver(String[] p) {
+        if (p.length < 2) return;
+        String reason = arg(p, 2, "");
+        if (p.length >= 5) {
+            Integer newElo = toInteger(p[4]);
             if (newElo != null) lobby.updateElo(newElo);
             send(Protocol.PROFILE);
             send(Protocol.LEADERBOARD);
-            game.onGameOver(parts[1], reason, parts[3], parts[4]);
+            game.onGameOver(p[1], reason, p[3], p[4]);
         } else {
             if (lobby.isAccountMode()) send(Protocol.PROFILE);
             send(Protocol.LEADERBOARD);
-            game.onGameOver(parts[1], reason);
+            game.onGameOver(p[1], reason);
         }
     }
 
-    private void handleProfile(String[] parts) {
-        if (parts.length < 6) return;
+    private void handleProfile(String[] p) {
+        if (p.length < 6) return;
         try {
-            lobby.showProfile(parts[1], Integer.parseInt(parts[2]), Integer.parseInt(parts[3]),
-                    Integer.parseInt(parts[4]), Integer.parseInt(parts[5]));
+            lobby.showProfile(p[1], Integer.parseInt(p[2]), Integer.parseInt(p[3]),
+                    Integer.parseInt(p[4]), Integer.parseInt(p[5]));
         } catch (NumberFormatException exception) {
             lobby.showError("Không đọc được dữ liệu thành tích.");
         }
     }
 
-    private static Integer parseOptionalInteger(String[] parts, int index) {
-        return parts.length > index ? parseInteger(parts[index]) : null;
-    }
-
-    private static Integer parseInteger(String value) {
-        try {
-            return Integer.valueOf(value);
-        } catch (NumberFormatException exception) {
-            return null;
-        }
-    }
-
-    private static int parseIntegerOrDefault(String value, int defaultValue) {
-        try {
-            return Integer.parseInt(value);
-        } catch (NumberFormatException exception) {
-            return defaultValue;
-        }
-    }
-
-    @Override
-    public void onDisconnected() {
+    private void handleDisconnect() {
         client = null;
+        waitingForInitialLeaderboard = false;
+        game.reset();          // dừng đồng hồ, khóa bàn cờ nếu đang giữa ván
+        window.closeDialogs(); // đóng hộp thoại xin hòa/đầu hàng còn mở
         lobby.onMatchFound();
-        window.showError("Lỗi mạng", "Mất kết nối đến server.");
         showLogin();
+        window.showError("Lỗi mạng", "Mất kết nối đến server.");
     }
 
-    private void closeClient() {
-        Client current = client;
-        if (current != null) current.close();
-        client = null;
+    private static String arg(String[] p, int index, String fallback) {
+        return p.length > index ? p[index] : fallback;
+    }
+
+    private static Integer toInteger(String value) {
+        try { return Integer.valueOf(value); } catch (NumberFormatException e) { return null; }
+    }
+
+    private static int toInt(String value, int fallback) {
+        Integer v = toInteger(value);
+        return v == null ? fallback : v;
     }
 
     private void exit() {
@@ -291,10 +285,6 @@ public final class MainFrame implements Client.Listener {
         }
         window.dispose();
         System.exit(0);
-    }
-
-    public void showWindow() {
-        window.showWindow();
     }
 
     public static void main(String[] args) {

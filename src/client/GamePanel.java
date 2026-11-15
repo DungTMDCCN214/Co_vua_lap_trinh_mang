@@ -10,21 +10,18 @@ public final class GamePanel implements GameView.Listener {
     private String opponent = "";
     private String opponentElo = "-";
     private boolean isBlitz;
-    private boolean over;
+    private boolean over = true; // true khi chưa có ván nào đang diễn ra
 
     public GamePanel(MainFrame frame) {
         this.frame = frame;
         view.setListener(this);
     }
 
-    public java.awt.Component view() {
-        return view;
-    }
+    public java.awt.Component view() { return view; }
 
     @Override
     public void onMove(int fromColumn, int fromRow, int toColumn, int toRow) {
-        frame.send(Protocol.build(Protocol.MOVE,
-                fromColumn + "," + fromRow, toColumn + "," + toRow));
+        if (!over) frame.send(Protocol.build(Protocol.MOVE, fromColumn + "," + fromRow, toColumn + "," + toRow));
     }
 
     @Override
@@ -34,24 +31,28 @@ public final class GamePanel implements GameView.Listener {
 
     @Override
     public void onSurrender() {
-        if (!over && frame.confirmSurrender()) {
-            frame.send(Protocol.SURRENDER);
-        }
+        if (!over && frame.confirmSurrender() && !over) frame.send(Protocol.SURRENDER);
     }
 
     @Override
     public void onDrawOffer() {
-        if (!over && frame.confirmDrawOffer()) {
+        if (!over && frame.confirmDrawOffer() && !over) {
             frame.send(Protocol.DRAW_OFFER);
+            view.setDrawOfferEnabled(false); // tránh gửi liên tục khi đối thủ chưa trả lời
             view.addChat("Hệ thống", "Bạn đã gửi đề nghị hòa tới đối thủ.");
         }
+    }
+
+    @Override
+    public void onLeave() {
+        if (over) frame.showLobby();
     }
 
     public void onDrawOfferReceived() {
         if (over) return;
         view.addChat("Hệ thống", "Đối thủ gửi lời đề nghị hòa cờ.");
         boolean accepted = frame.confirmAcceptDraw();
-        if (over) return;
+        if (over) return; // ván đã kết thúc trong lúc hộp thoại đang mở
         if (accepted) {
             frame.send(Protocol.DRAW_ACCEPT);
         } else {
@@ -61,23 +62,19 @@ public final class GamePanel implements GameView.Listener {
     }
 
     public void onDrawDeclined() {
+        if (over) return;
+        view.setDrawOfferEnabled(true);
         view.addChat("Hệ thống", "Đối thủ đã từ chối lời đề nghị hòa (hoặc lời đề nghị đã tự hủy do đối thủ đi nước tiếp theo).");
     }
 
     public void onDrawFailed(String reason) {
+        if (over) return;
+        view.setDrawOfferEnabled(true);
         view.addChat("Hệ thống", "Không thể xin hòa: " + reason);
     }
 
     public void onClock(long msWhite, long msBlack, boolean isWhiteTurn, boolean running) {
-        view.updateClock(msWhite, msBlack, isWhiteTurn, running);
-    }
-
-    public void startGame(String opponent, boolean white) {
-        startGame(opponent, white, "-");
-    }
-
-    public void startGame(String opponent, boolean white, String opponentElo) {
-        startGame(opponent, white, opponentElo, false, 0, 0);
+        if (!over) view.updateClock(msWhite, msBlack, isWhiteTurn, running);
     }
 
     public void startGame(String opponent, boolean white, String opponentElo,
@@ -97,11 +94,13 @@ public final class GamePanel implements GameView.Listener {
     }
 
     public void onMove(String from, String to) {
+        if (over) return;
         try {
             String[] source = from.split(",");
             String[] target = to.split(",");
             view.applyMove(Integer.parseInt(source[0]), Integer.parseInt(source[1]),
                     Integer.parseInt(target[0]), Integer.parseInt(target[1]));
+            view.setDrawOfferEnabled(true); // lời đề nghị hòa cũ (nếu có) đã hết hiệu lực sau nước đi
             updateStatus();
         } catch (NumberFormatException | ArrayIndexOutOfBoundsException ignored) {
             // Ignore malformed move coordinates from the network.
@@ -113,9 +112,7 @@ public final class GamePanel implements GameView.Listener {
         view.setStatus("Nước đi bị từ chối: " + reason);
     }
 
-    public void addChat(String sender, String message) {
-        view.addChat(sender, message);
-    }
+    public void addChat(String sender, String message) { view.addChat(sender, message); }
 
     private void updateStatus() {
         if (over) return;
@@ -126,54 +123,50 @@ public final class GamePanel implements GameView.Listener {
         view.setStatus(text);
     }
 
-    public void onGameOver(String result, String reason) {
-        onGameOver(result, reason, null, null);
-    }
-
-    public void onGameOver(String result, String reason, String deltaText, String newEloText) {
+    /** Dừng ván hiện tại (kết thúc bình thường hoặc mất kết nối): khóa bàn cờ, dừng đồng hồ, tắt nút. */
+    public void reset() {
         over = true;
         view.stopClock();
         view.setBoardActive(false);
         view.setSurrenderEnabled(false);
+    }
 
-        String message = resultMessage(result, reason);
-        String deltaLabel = formatDelta(deltaText);
-        if (newEloText != null && !newEloText.isEmpty()) {
-            message += "\nElo mới: " + newEloText + deltaLabel;
-        } else if (!deltaLabel.isEmpty()) {
-            message += deltaLabel;
-        }
+    public void onGameOver(String result, String reason) { onGameOver(result, reason, null, null); }
 
-        frame.showGameOverMessage(result, reason, message);
-        frame.showLobby();
+    public void onGameOver(String result, String reason, String deltaText, String newEloText) {
+        if (over) return; // ván này đã được xử lý kết thúc/rời đi rồi
+        reset();
+        view.setFinished(true);
+        String summary = resultMessage(result, reason);
+        String message = summary + formatDelta(deltaText, newEloText);
+        view.setStatus("Ván đấu đã kết thúc  ·  " + summary);
+        view.addChat("Hệ thống", message);
+        // Ở lại màn hình ván cờ; chỉ về sảnh khi người chơi bấm "Về sảnh" (ở hộp thoại hoặc dưới bàn cờ).
+        // `over` còn true nghĩa là chưa có ván mới bắt đầu trong lúc hộp thoại đang mở.
+        if (frame.showGameOverMessage(result, reason, message) && over) frame.showLobby();
     }
 
     private static String resultMessage(String result, String reason) {
+        boolean win = "WIN".equals(result);
         switch (reason) {
-            case "CHECKMATE":
-                return result.equals("WIN") ? "Chiếu hết! Bạn thắng." : "Bạn bị chiếu hết.";
-            case "STALEMATE":
-                return "Hòa cờ — bên tới lượt không còn nước đi hợp lệ.";
-            case "SURRENDER":
-                return result.equals("WIN") ? "Đối thủ đã đầu hàng. Bạn thắng." : "Bạn đã đầu hàng.";
-            case "DISCONNECT":
-                return result.equals("WIN") ? "Đối thủ mất kết nối. Bạn thắng." : "Bạn đã mất kết nối.";
-            case "TIMEOUT":
-                return result.equals("WIN") ? "Đối thủ đã hết thời gian! Bạn thắng." : "Bạn đã hết thời gian! Bạn thua.";
-            case "AGREEMENT":
-                return "Hai bên đã đồng ý hòa ván đấu.";
-            default:
-                return "Ván đấu kết thúc: " + result + ("".equals(reason) ? "" : " (" + reason + ")");
+            case "CHECKMATE": return win ? "Chiếu hết! Bạn thắng." : "Bạn bị chiếu hết.";
+            case "STALEMATE": return "Hòa cờ — bên tới lượt không còn nước đi hợp lệ.";
+            case "SURRENDER": return win ? "Đối thủ đã đầu hàng. Bạn thắng." : "Bạn đã đầu hàng.";
+            case "DISCONNECT": return win ? "Đối thủ mất kết nối. Bạn thắng." : "Bạn đã mất kết nối.";
+            case "TIMEOUT": return win ? "Đối thủ đã hết thời gian! Bạn thắng." : "Bạn đã hết thời gian! Bạn thua.";
+            case "AGREEMENT": return "Hai bên đã đồng ý hòa ván đấu.";
+            default: return "Ván đấu kết thúc: " + result + (reason.isEmpty() ? "" : " (" + reason + ")");
         }
     }
 
-    private static String formatDelta(String deltaText) {
-        if (deltaText == null || deltaText.isEmpty()) return "";
+    private static String formatDelta(String deltaText, String newEloText) {
+        String delta = "";
         try {
-            int delta = Integer.parseInt(deltaText);
-            return "  (" + (delta >= 0 ? "+" : "") + delta + " Elo)";
-        } catch (NumberFormatException ignored) {
-            return "";
+            int d = Integer.parseInt(deltaText);
+            delta = "  (" + (d >= 0 ? "+" : "") + d + " Elo)";
+        } catch (NumberFormatException ignored) { // null hoặc không phải số
         }
+        boolean hasElo = newEloText != null && !newEloText.isEmpty();
+        return hasElo ? "\nElo mới: " + newEloText + delta : delta;
     }
 }

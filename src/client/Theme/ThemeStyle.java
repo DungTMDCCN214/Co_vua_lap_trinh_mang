@@ -6,7 +6,6 @@ import javax.swing.border.Border;
 import javax.swing.plaf.basic.BasicButtonUI;
 import java.awt.*;
 import java.awt.geom.RoundRectangle2D;
-import java.awt.geom.RoundRectangle2D;
 
 final class ThemeStyle {
     static final Color PAPER = new Color(246, 245, 239);
@@ -21,6 +20,12 @@ final class ThemeStyle {
     static final Color GOLD = new Color(177, 145, 91);
 
     private ThemeStyle() {}
+
+    /** Escape văn bản thường để nhúng an toàn vào JLabel dạng HTML (\n -> <br>). */
+    static String html(String text) {
+        return (text == null ? "" : text).replace("&", "&amp;").replace("<", "&lt;")
+                .replace(">", "&gt;").replace("\n", "<br>");
+    }
 
     static void panel(JPanel panel, Color color) {
         panel.setBackground(color);

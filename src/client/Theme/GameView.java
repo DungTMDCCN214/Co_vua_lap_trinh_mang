@@ -13,6 +13,7 @@ public final class GameView extends JPanel {
         void onChat(String message);
         void onSurrender();
         void onDrawOffer();
+        void onLeave();
     }
 
     private final BoardPanel board = new BoardPanel();
@@ -22,6 +23,7 @@ public final class GameView extends JPanel {
     private final JButton sendButton = new JButton("Gửi");
     private final JButton drawButton = new JButton("Xin hòa");
     private final JButton surrenderButton = new JButton("Đầu hàng");
+    private final JButton leaveButton = new JButton("Về sảnh");
 
     // Chess clock components & player badges
     private final JLabel opponentInfoLabel = new JLabel("Đối thủ");
@@ -87,6 +89,8 @@ public final class GameView extends JPanel {
         ThemeStyle.button(sendButton, true);
         ThemeStyle.button(drawButton, false);
         ThemeStyle.button(surrenderButton, false);
+        ThemeStyle.button(leaveButton, true);
+        leaveButton.setVisible(false); // chỉ hiện khi ván đã kết thúc
 
         JPanel chatInputRow = new JPanel(new BorderLayout(6, 0));
         chatInputRow.setOpaque(false);
@@ -115,6 +119,7 @@ public final class GameView extends JPanel {
         footer.setOpaque(false);
         footer.add(drawButton);
         footer.add(surrenderButton);
+        footer.add(leaveButton);
 
         add(header, BorderLayout.NORTH);
         add(center, BorderLayout.CENTER);
@@ -130,6 +135,9 @@ public final class GameView extends JPanel {
         });
         surrenderButton.addActionListener(event -> {
             if (listener != null) listener.onSurrender();
+        });
+        leaveButton.addActionListener(event -> {
+            if (listener != null) listener.onLeave();
         });
 
         // 100ms local tick timer for smooth countdown display
@@ -241,6 +249,7 @@ public final class GameView extends JPanel {
     public void stopClock() {
         clockRunning = false;
         if (countdownTimer.isRunning()) countdownTimer.stop();
+        if (isBlitz) updateClockLabels();
     }
 
     private void sendChat() {
@@ -257,6 +266,7 @@ public final class GameView extends JPanel {
         board.start(white);
         surrenderButton.setEnabled(true);
         drawButton.setEnabled(true);
+        setFinished(false);
         chatArea.setText("");
     }
 
@@ -294,6 +304,15 @@ public final class GameView extends JPanel {
     public void setSurrenderEnabled(boolean enabled) {
         surrenderButton.setEnabled(enabled);
         drawButton.setEnabled(enabled);
+    }
+
+    /** Ván đã kết thúc: ẩn Xin hòa/Đầu hàng, hiện Về sảnh, khóa ô chat. */
+    public void setFinished(boolean finished) {
+        leaveButton.setVisible(finished);
+        drawButton.setVisible(!finished);
+        surrenderButton.setVisible(!finished);
+        chatInput.setEnabled(!finished);
+        sendButton.setEnabled(!finished);
     }
 
     public void setDrawOfferEnabled(boolean enabled) {
