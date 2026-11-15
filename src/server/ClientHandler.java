@@ -80,7 +80,8 @@ public class ClientHandler implements Runnable {
 
         switch (cmd) {
             case Protocol.FIND_MATCH:
-                server.getRoomManager().findMatch(this);
+                // FIND_MATCH = cờ thường, FIND_MATCH|BLITZ = cờ chớp
+                server.getRoomManager().findMatch(this, p.length >= 2 && p[1].equals(Protocol.BLITZ));
                 break;
             case Protocol.CANCEL_FIND:
                 server.getRoomManager().cancel(this);
@@ -103,6 +104,30 @@ public class ClientHandler implements Runnable {
                 break;
             case Protocol.PROFILE:
                 sendProfile();
+                break;
+            // ----- xin hòa: chuyển cho GameRoom xử lý -----
+            case Protocol.DRAW_OFFER:
+            case Protocol.DRAW_ACCEPT:
+            case Protocol.DRAW_DECLINE:
+                handleDraw(cmd);
+                break;
+            // ----- mời đấu: chuyển cho RoomManager xử lý -----
+            case Protocol.ONLINE_LIST:
+                server.getRoomManager().sendOnlineList(this);
+                break;
+            case Protocol.INVITE:
+                // INVITE|tên = mời cờ thường, INVITE|tên|BLITZ = mời cờ chớp
+                if (p.length >= 2) server.getRoomManager().invite(this, p[1], p.length >= 3 && p[2].equals(Protocol.BLITZ));
+                else send(Protocol.build(Protocol.INVITE_FAIL, "Thiếu tên người cần mời"));
+                break;
+            case Protocol.INVITE_ACCEPT:
+                server.getRoomManager().respondInvite(this, p.length >= 2 ? p[1] : "", true);
+                break;
+            case Protocol.INVITE_DECLINE:
+                server.getRoomManager().respondInvite(this, p.length >= 2 ? p[1] : "", false);
+                break;
+            case Protocol.INVITE_CANCEL:
+                server.getRoomManager().cancelInvite(this);
                 break;
             case Protocol.DISCONNECT:
                 return false;
@@ -135,8 +160,8 @@ public class ClientHandler implements Runnable {
             send(Protocol.build(Protocol.LOGIN_FAIL, "Server yêu cầu đăng nhập bằng tài khoản"));
             return;
         }
-        if (name.isEmpty() || name.length() > 20 || name.contains("|")) {
-            send(Protocol.build(Protocol.LOGIN_FAIL, "Tên không hợp lệ (1-20 ký tự, không chứa '|')"));
+        if (name.isEmpty() || name.length() > 20 || name.contains("|") || name.contains(":")) {
+            send(Protocol.build(Protocol.LOGIN_FAIL, "Tên không hợp lệ (1-20 ký tự, không chứa '|' hoặc ':')"));
             return;
         }
         try {
@@ -239,6 +264,20 @@ public class ClientHandler implements Runnable {
 
     // ===================== NƯỚC ĐI / DỌN DẸP =====================
 
+    /** DRAW_OFFER / DRAW_ACCEPT / DRAW_DECLINE: chỉ có nghĩa khi đang trong ván. */
+    private void handleDraw(String cmd) {
+        GameRoom r = room;
+        if (r == null) {
+            send(Protocol.build(Protocol.DRAW_FAIL, "Bạn chưa ở trong ván"));
+            return;
+        }
+        switch (cmd) {
+            case Protocol.DRAW_OFFER: r.offerDraw(this); break;
+            case Protocol.DRAW_ACCEPT: r.acceptDraw(this); break;
+            default: r.declineDraw(this);
+        }
+    }
+
     private void handleMove(String[] p) {
         GameRoom r = room;
         if (r == null || p.length < 3) {
@@ -257,7 +296,7 @@ public class ClientHandler implements Runnable {
     /** Dọn dẹp khi Client rời đi: gỡ khỏi danh sách online, hàng đợi, và xử thua nếu đang trong trận. */
     private void cleanup() {
         server.unregister(username, this);
-        server.getRoomManager().cancel(this);
+        server.getRoomManager().onDisconnect(this); // gỡ khỏi hàng đợi và hủy lời mời đang chờ
         GameRoom r = room;
         if (r != null) r.endGame(this, "DISCONNECT"); // người rớt mạng thua, đối thủ thắng
         try { socket.close(); } catch (IOException ignored) {}

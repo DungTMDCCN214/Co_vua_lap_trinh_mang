@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.sql.SQLException;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -52,6 +53,12 @@ public class Server {
     public boolean register(String name, ClientHandler h) { return online.putIfAbsent(name, h) == null; }
 
     public void unregister(String name, ClientHandler h) { if (name != null) online.remove(name, h); }
+
+    /** Tìm người đang online theo tên (dùng cho lời mời đấu); null nếu không có. */
+    public ClientHandler findOnline(String name) { return online.get(name); }
+
+    /** Bản sao danh sách online (tên -> handler) để duyệt an toàn khi có người vào/ra. */
+    public Map<String, ClientHandler> onlineSnapshot() { return new HashMap<>(online); }
 
     /**
      * Chạy: java -cp "out;lib/sqlite-jdbc-3.46.1.3.jar" server.Server [port]   (Linux/macOS dùng ':' thay cho ';')

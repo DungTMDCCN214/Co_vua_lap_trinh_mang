@@ -11,6 +11,8 @@ import java.util.List;
 public class RankingService {
     /** Ván quá ngắn (ví dụ đầu hàng ngay nước đầu) không tính điểm, tránh "cày điểm" giữa hai người quen. */
     public static final int MIN_PLIES_RANKED = 2;
+    /** Hòa do hai bên thỏa thuận chỉ tính điểm khi ván đủ dài (20 nửa nước = mỗi bên 10 nước), chống thỏa thuận hòa để cày điểm. */
+    public static final int MIN_PLIES_DRAW_AGREED = 20;
 
     /** Kết quả cập nhật điểm. */
     public static final class Result {
