@@ -2,10 +2,13 @@
 
 ## Biên dịch
     rm -rf out && mkdir out
+
+    $sources = Get-ChildItem .\src -Recurse -Filter *.java | ForEach-Object { $_.FullName }
+javac -encoding UTF-8 -d .\out $sources
     
 
 ## Chạy
-    javac -encoding UTF-8 -d out src/protocol/*.java src/server/*.java src/client/*.java src/client/Theme/*.java
+    java -cp "out;src\lib\sqlite-jdbc-3.46.1.3.jar" server.Server 5555
     java -cp out client.MainFrame        # Client (chạy 2 lần để có 2 người chơi)
 
 ## Giao thức (dòng text, phân tách bằng '|')

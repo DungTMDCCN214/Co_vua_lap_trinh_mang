@@ -16,7 +16,7 @@ final class GameResultDialog extends JDialog {
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setResizable(false);
 
-        JPanel content = new JPanel(new BorderLayout(0, 16));
+        JPanel content = ThemeStyle.cardPanel(new BorderLayout(0, 16), ThemeStyle.PAPER);
         content.setBackground(ThemeStyle.PAPER);
         content.setBorder(ThemeStyle.cardBorder(18, 18, 18, 18));
 
@@ -48,8 +48,7 @@ final class GameResultDialog extends JDialog {
         banner.add(emblem, BorderLayout.WEST);
         banner.add(titleBlock, BorderLayout.CENTER);
 
-        JPanel detailsCard = new JPanel(new BorderLayout(0, 8));
-        detailsCard.setBackground(Color.WHITE);
+        JPanel detailsCard = ThemeStyle.cardPanel(new BorderLayout(0, 8), Color.WHITE);
         detailsCard.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(0, 4, 0, 0, accent),
                 new EmptyBorder(14, 14, 14, 14)));
@@ -106,6 +105,10 @@ final class GameResultDialog extends JDialog {
                 return result.equals("WIN") ? "Đối thủ đã đầu hàng" : "Bạn đã đầu hàng";
             case "DISCONNECT":
                 return result.equals("WIN") ? "Đối thủ mất kết nối" : "Bạn mất kết nối";
+            case "TIMEOUT":
+                return result.equals("WIN") ? "Đối thủ đã hết giờ" : "Bạn đã hết giờ";
+            case "AGREEMENT":
+                return "Hai bên đồng ý hòa";
             default:
                 return result.equals("DRAW") ? "Trận đấu kết thúc với kết quả hòa" : "Trận đấu đã kết thúc";
         }

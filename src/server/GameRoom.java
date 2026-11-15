@@ -107,11 +107,9 @@ public class GameRoom {
             from.send(Protocol.build(Protocol.INVALID_MOVE, "Chưa đến lượt của bạn"));
             return;
         }
-        // Cờ chớp: nước đầu tiên của mỗi bên không tính giờ. Từ nước thứ hai, kiểm tra ngay trong khối khóa
-        // xem người đi còn giờ không (phòng khi nước đi đến đúng lúc bộ hẹn giờ chưa kịp chạy).
-        boolean grace = moves.size() < 2;
+        // Cờ chớp: kiểm tra ngay trong khối khóa xem người đi còn giờ không.
         long elapsedMs = 0;
-        if (blitz && !grace) {
+        if (blitz) {
             elapsedMs = (System.nanoTime() - turnStartNanos) / 1_000_000;
             long remaining = (from == white) ? whiteMs : blackMs;
             if (elapsedMs >= remaining) {
@@ -129,10 +127,8 @@ public class GameRoom {
         black.send(msg);
 
         if (blitz) {
-            if (!grace) { // trừ thời gian đã dùng, cộng thêm giờ thưởng (nếu có)
-                if (from == white) whiteMs = whiteMs - elapsedMs + incrementMs;
-                else blackMs = blackMs - elapsedMs + incrementMs;
-            }
+            if (from == white) whiteMs = Math.max(0, whiteMs - elapsedMs + incrementMs);
+            else blackMs = Math.max(0, blackMs - elapsedMs + incrementMs);
             turnStartNanos = System.nanoTime();
             armFlag();    // hẹn giờ cho bên vừa tới lượt
             sendClock();  // báo thời gian chuẩn của server cho cả hai client
@@ -163,8 +159,7 @@ public class GameRoom {
     private void armFlag() {
         if (flagTask != null) flagTask.cancel(false);
         final int epoch = ++clockEpoch;
-        boolean grace = moves.size() < 2;
-        long delay = grace ? FIRST_MOVE_LIMIT_MS : (board.isWhiteTurn() ? whiteMs : blackMs);
+        long delay = board.isWhiteTurn() ? whiteMs : blackMs;
         flagTask = CLOCK_TIMER.schedule(() -> onFlag(epoch), Math.max(1, delay), TimeUnit.MILLISECONDS);
     }
 
@@ -174,10 +169,10 @@ public class GameRoom {
         endGame(board.isWhiteTurn() ? white : black, "TIMEOUT");
     }
 
-    /** CLOCK|ms Trắng|ms Đen|W/B (bên đang tới lượt)|1 nếu đồng hồ đang chạy, 0 nếu đang ở nước đầu chưa tính giờ. */
+    /** CLOCK|ms Trắng|ms Đen|W/B (bên đang tới lượt)|1 (đồng hồ cờ chớp đang chạy). */
     private void sendClock() {
         String msg = Protocol.build(Protocol.CLOCK, String.valueOf(whiteMs), String.valueOf(blackMs),
-                board.isWhiteTurn() ? "W" : "B", moves.size() < 2 ? "0" : "1");
+                board.isWhiteTurn() ? "W" : "B", "1");
         white.send(msg);
         black.send(msg);
     }

@@ -9,6 +9,7 @@ public final class GamePanel implements GameView.Listener {
     private final GameView view = new GameView();
     private String opponent = "";
     private String opponentElo = "-";
+    private boolean isBlitz;
     private boolean over;
 
     public GamePanel(MainFrame frame) {
@@ -38,17 +39,60 @@ public final class GamePanel implements GameView.Listener {
         }
     }
 
+    @Override
+    public void onDrawOffer() {
+        if (!over && frame.confirmDrawOffer()) {
+            frame.send(Protocol.DRAW_OFFER);
+            view.addChat("Hệ thống", "Bạn đã gửi đề nghị hòa tới đối thủ.");
+        }
+    }
+
+    public void onDrawOfferReceived() {
+        if (over) return;
+        view.addChat("Hệ thống", "Đối thủ gửi lời đề nghị hòa cờ.");
+        boolean accepted = frame.confirmAcceptDraw();
+        if (over) return;
+        if (accepted) {
+            frame.send(Protocol.DRAW_ACCEPT);
+        } else {
+            frame.send(Protocol.DRAW_DECLINE);
+            view.addChat("Hệ thống", "Bạn đã từ chối lời đề nghị hòa.");
+        }
+    }
+
+    public void onDrawDeclined() {
+        view.addChat("Hệ thống", "Đối thủ đã từ chối lời đề nghị hòa (hoặc lời đề nghị đã tự hủy do đối thủ đi nước tiếp theo).");
+    }
+
+    public void onDrawFailed(String reason) {
+        view.addChat("Hệ thống", "Không thể xin hòa: " + reason);
+    }
+
+    public void onClock(long msWhite, long msBlack, boolean isWhiteTurn, boolean running) {
+        view.updateClock(msWhite, msBlack, isWhiteTurn, running);
+    }
+
     public void startGame(String opponent, boolean white) {
         startGame(opponent, white, "-");
     }
 
     public void startGame(String opponent, boolean white, String opponentElo) {
+        startGame(opponent, white, opponentElo, false, 0, 0);
+    }
+
+    public void startGame(String opponent, boolean white, String opponentElo,
+                          boolean isBlitz, int blitzSeconds, int incrementSeconds) {
         this.opponent = opponent;
         this.opponentElo = opponentElo == null || opponentElo.isEmpty() ? "-" : opponentElo;
-        over = false;
+        this.isBlitz = isBlitz;
+        this.over = false;
+
+        view.setupMatch(white, opponent, this.opponentElo, isBlitz, blitzSeconds, incrementSeconds);
         view.startBoard(white);
+
+        String modeText = isBlitz ? " [Cờ chớp " + (blitzSeconds / 60) + "+" + incrementSeconds + "]" : " [Cờ tiêu chuẩn]";
         view.addChat("Hệ thống", "Bạn cầm quân " + (white ? "TRẮNG" : "ĐEN")
-                + ", đối thủ: " + opponent + " (Elo: " + this.opponentElo + ")");
+                + ", đối thủ: " + opponent + " (Elo: " + this.opponentElo + ")" + modeText);
         updateStatus();
     }
 
@@ -78,6 +122,7 @@ public final class GamePanel implements GameView.Listener {
         String text = view.isMyTurn() ? "Đến lượt bạn" : "Đến lượt " + opponent;
         if (view.isInCheck()) text += "  ·  CHIẾU";
         text += "  ·  Elo đối thủ " + opponentElo;
+        if (isBlitz) text += "  ·  Cờ chớp";
         view.setStatus(text);
     }
 
@@ -87,6 +132,7 @@ public final class GamePanel implements GameView.Listener {
 
     public void onGameOver(String result, String reason, String deltaText, String newEloText) {
         over = true;
+        view.stopClock();
         view.setBoardActive(false);
         view.setSurrenderEnabled(false);
 
@@ -112,8 +158,12 @@ public final class GamePanel implements GameView.Listener {
                 return result.equals("WIN") ? "Đối thủ đã đầu hàng. Bạn thắng." : "Bạn đã đầu hàng.";
             case "DISCONNECT":
                 return result.equals("WIN") ? "Đối thủ mất kết nối. Bạn thắng." : "Bạn đã mất kết nối.";
+            case "TIMEOUT":
+                return result.equals("WIN") ? "Đối thủ đã hết thời gian! Bạn thắng." : "Bạn đã hết thời gian! Bạn thua.";
+            case "AGREEMENT":
+                return "Hai bên đã đồng ý hòa ván đấu.";
             default:
-                return "Ván đấu kết thúc: " + result;
+                return "Ván đấu kết thúc: " + result + ("".equals(reason) ? "" : " (" + reason + ")");
         }
     }
 
