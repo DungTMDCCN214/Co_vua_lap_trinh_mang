@@ -7,12 +7,15 @@ import java.util.List;
  * Logic cờ vua dùng chung cho Server (kiểm tra hợp lệ - authoritative) và Client (tô sáng nước đi).
  * Bàn cờ g[hàng][cột]; chữ HOA = quân Trắng, chữ thường = quân Đen, '.' = ô trống.
  * Trắng ở phía dưới (hàng 6-7), đi theo hướng hàng giảm dần.
- * Đã hỗ trợ: luật đi từng quân, không cho để Vua bị chiếu, phong Hậu tự động, chiếu hết / hòa cờ (hết nước đi).
- * Chưa hỗ trợ: nhập thành, bắt tốt qua đường.
+ * Đã hỗ trợ: luật đi từng quân, nhập thành, bắt tốt qua đường, không cho để Vua bị chiếu,
+ * phong Hậu tự động, chiếu hết / hòa cờ (hết nước đi).
  */
 public class ChessBoard {
     private final char[][] g = new char[8][8];
     private boolean whiteTurn = true;
+    private boolean whiteKingSideCastle, whiteQueenSideCastle;
+    private boolean blackKingSideCastle, blackQueenSideCastle;
+    private int enPassantColumn, enPassantRow;
 
     public ChessBoard() { reset(); }
 
@@ -26,6 +29,9 @@ public class ChessBoard {
             g[7][c] = Character.toUpperCase(back.charAt(c));
         }
         whiteTurn = true;
+        whiteKingSideCastle = whiteQueenSideCastle = true;
+        blackKingSideCastle = blackQueenSideCastle = true;
+        enPassantColumn = enPassantRow = -1;
     }
 
     public char get(int c, int r) { return g[r][c]; }
@@ -39,12 +45,28 @@ public class ChessBoard {
         if (!inside(fc, fr) || !inside(tc, tr)) return false;
         char p = g[fr][fc];
         if (p == '.' || isWhite(p) != whiteTurn) return false;
-        if (!pseudoLegal(fc, fr, tc, tr)) return false;
+        boolean castling = isCastlingMove(fc, fr, tc, tr);
+        if (castling ? !canCastle(fc, fr, tc) : !pseudoLegal(fc, fr, tc, tr)) return false;
         // Thử đi rồi kiểm tra Vua có bị chiếu không, sau đó hoàn tác
         char captured = g[tr][tc];
+        boolean enPassant = isEnPassantMove(fc, fr, tc, tr);
+        int capturedPawnRow = tr - (isWhite(p) ? -1 : 1);
+        if (enPassant) g[capturedPawnRow][tc] = '.';
         g[tr][tc] = p; g[fr][fc] = '.';
+        int rookFrom = -1, rookTo = -1;
+        if (castling) {
+            rookFrom = tc > fc ? 7 : 0;
+            rookTo = tc > fc ? tc - 1 : tc + 1;
+            g[fr][rookTo] = g[fr][rookFrom];
+            g[fr][rookFrom] = '.';
+        }
         boolean safe = !inCheck(whiteTurn);
+        if (castling) {
+            g[fr][rookFrom] = g[fr][rookTo];
+            g[fr][rookTo] = '.';
+        }
         g[fr][fc] = p; g[tr][tc] = captured;
+        if (enPassant) g[capturedPawnRow][tc] = isWhite(p) ? 'p' : 'P';
         return safe;
     }
 
@@ -52,10 +74,26 @@ public class ChessBoard {
     public boolean move(int fc, int fr, int tc, int tr) {
         if (!isLegalMove(fc, fr, tc, tr)) return false;
         char p = g[fr][fc];
+        char captured = g[tr][tc];
+        boolean enPassant = isEnPassantMove(fc, fr, tc, tr);
+        boolean castling = isCastlingMove(fc, fr, tc, tr);
+        updateCastlingRights(p, fc, fr, captured, tc, tr);
+        if (enPassant) g[tr - (isWhite(p) ? -1 : 1)][tc] = '.';
         g[fr][fc] = '.';
+        if (castling) {
+            int rookFrom = tc > fc ? 7 : 0;
+            int rookTo = tc > fc ? tc - 1 : tc + 1;
+            g[fr][rookTo] = g[fr][rookFrom];
+            g[fr][rookFrom] = '.';
+        }
         if (p == 'P' && tr == 0) p = 'Q';      // phong Hậu tự động
         if (p == 'p' && tr == 7) p = 'q';
         g[tr][tc] = p;
+        enPassantColumn = enPassantRow = -1;
+        if (Character.toLowerCase(p) == 'p' && Math.abs(tr - fr) == 2) {
+            enPassantColumn = fc;
+            enPassantRow = (fr + tr) / 2;
+        }
         whiteTurn = !whiteTurn;
         return true;
     }
@@ -113,7 +151,7 @@ public class ChessBoard {
                 int dir = isWhite(p) ? -1 : 1, start = isWhite(p) ? 6 : 1;
                 if (dc == 0 && dr == dir) return t == '.';
                 if (dc == 0 && dr == 2 * dir && fr == start) return t == '.' && g[fr + dir][fc] == '.';
-                return adc == 1 && dr == dir && t != '.';
+                return adc == 1 && dr == dir && (t != '.' || isEnPassantMove(fc, fr, tc, tr));
             }
             case 'n': return adc * adr == 2;
             case 'b': return adc == adr && clear(fc, fr, tc, tr);
@@ -122,6 +160,51 @@ public class ChessBoard {
             case 'k': return adc <= 1 && adr <= 1;
             default: return false;
         }
+    }
+
+    private boolean isCastlingMove(int fc, int fr, int tc, int tr) {
+        return g[fr][fc] != '.' && Character.toLowerCase(g[fr][fc]) == 'k'
+                && fr == tr && Math.abs(tc - fc) == 2;
+    }
+
+    private boolean canCastle(int fc, int fr, int tc) {
+        char king = g[fr][fc];
+        boolean white = isWhite(king);
+        int homeRow = white ? 7 : 0;
+        boolean kingSide = tc > fc;
+        int rookColumn = kingSide ? 7 : 0;
+        if (fc != 4 || fr != homeRow || tc != (kingSide ? 6 : 2)) return false;
+        if (white ? (kingSide ? !whiteKingSideCastle : !whiteQueenSideCastle)
+                : (kingSide ? !blackKingSideCastle : !blackQueenSideCastle)) return false;
+        if (g[homeRow][rookColumn] != (white ? 'R' : 'r')) return false;
+
+        int step = kingSide ? 1 : -1;
+        for (int c = fc + step; c != rookColumn; c += step)
+            if (g[homeRow][c] != '.') return false;
+        return !inCheck(white) && !attacked(fc + step, homeRow, !white)
+                && !attacked(tc, homeRow, !white);
+    }
+
+    private boolean isEnPassantMove(int fc, int fr, int tc, int tr) {
+        char pawn = g[fr][fc];
+        if (pawn != 'P' && pawn != 'p') return false;
+        int direction = isWhite(pawn) ? -1 : 1;
+        if (tc != enPassantColumn || tr != enPassantRow || g[tr][tc] != '.'
+                || tr - fr != direction || Math.abs(tc - fc) != 1) return false;
+        return g[fr][tc] == (isWhite(pawn) ? 'p' : 'P');
+    }
+
+    private void updateCastlingRights(char piece, int fc, int fr, char captured, int tc, int tr) {
+        if (piece == 'K') whiteKingSideCastle = whiteQueenSideCastle = false;
+        if (piece == 'k') blackKingSideCastle = blackQueenSideCastle = false;
+        if (piece == 'R' && fr == 7 && fc == 0) whiteQueenSideCastle = false;
+        if (piece == 'R' && fr == 7 && fc == 7) whiteKingSideCastle = false;
+        if (piece == 'r' && fr == 0 && fc == 0) blackQueenSideCastle = false;
+        if (piece == 'r' && fr == 0 && fc == 7) blackKingSideCastle = false;
+        if (captured == 'R' && tr == 7 && tc == 0) whiteQueenSideCastle = false;
+        if (captured == 'R' && tr == 7 && tc == 7) whiteKingSideCastle = false;
+        if (captured == 'r' && tr == 0 && tc == 0) blackQueenSideCastle = false;
+        if (captured == 'r' && tr == 0 && tc == 7) blackKingSideCastle = false;
     }
 
     /** Đường đi từ (fc,fr) tới (tc,tr) có bị quân nào cản không (không tính ô đầu/cuối). */
