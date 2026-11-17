@@ -31,7 +31,7 @@ public class BoardPanel extends JPanel {
     public BoardPanel() {
         setPreferredSize(new Dimension(560, 560));
         addMouseListener(new MouseAdapter() {
-            @Override public void mousePressed(MouseEvent e) { click(e.getX(), e.getY()); }
+            @Override public void mousePressed(MouseEvent e) { if (SwingUtilities.isLeftMouseButton(e)) click(e.getX(), e.getY()); }
         });
     }
 

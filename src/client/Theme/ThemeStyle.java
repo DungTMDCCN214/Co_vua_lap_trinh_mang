@@ -21,6 +21,12 @@ final class ThemeStyle {
 
     private ThemeStyle() {}
 
+    /** Escape văn bản thường để nhúng an toàn vào JLabel dạng HTML (\n -> <br>). */
+    static String html(String text) {
+        return (text == null ? "" : text).replace("&", "&amp;").replace("<", "&lt;")
+                .replace(">", "&gt;").replace("\n", "<br>");
+    }
+
     static void panel(JPanel panel, Color color) {
         panel.setBackground(color);
     }
@@ -39,6 +45,10 @@ final class ThemeStyle {
         Color base = primary ? GREEN : PANEL;
         Color outline = primary ? GREEN_DARK : LINE;
         button(button, base, primary ? Color.WHITE : INK, outline);
+    }
+
+    static void outlineButton(JButton button) {
+        button(button, Color.WHITE, GREEN_DARK, new Color(165, 188, 172));
     }
 
     static void dangerButton(JButton button) {
@@ -94,6 +104,30 @@ final class ThemeStyle {
 
     static Border cardBorder(int top, int left, int bottom, int right) {
         return new RoundedBorder(LINE, 18, new Insets(top, left, bottom, right));
+    }
+
+    static JPanel cardPanel(LayoutManager layout, Color background) {
+        JPanel panel = new JPanel(layout) {
+            @Override
+            protected void paintComponent(Graphics graphics) {
+                Graphics2D g = (Graphics2D) graphics.create();
+                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g.setColor(getBackground());
+                g.fill(new RoundRectangle2D.Float(0, 0, getWidth(), getHeight(), 18, 18));
+                g.dispose();
+            }
+
+            @Override
+            protected void paintChildren(Graphics graphics) {
+                Graphics2D g = (Graphics2D) graphics.create();
+                g.clip(new RoundRectangle2D.Float(0, 0, getWidth(), getHeight(), 18, 18));
+                super.paintChildren(g);
+                g.dispose();
+            }
+        };
+        panel.setBackground(background);
+        panel.setOpaque(false);
+        return panel;
     }
 
     static void table(JTable table) {

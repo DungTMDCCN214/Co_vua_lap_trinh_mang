@@ -6,12 +6,14 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 
-/** Game screen layout. The existing chess board component is embedded without modification. */
+/** Game screen layout: chess board, player/opponent clock displays, and in-game controls. */
 public final class GameView extends JPanel {
     public interface Listener {
         void onMove(int fromColumn, int fromRow, int toColumn, int toRow);
         void onChat(String message);
         void onSurrender();
+        void onDrawOffer();
+        void onLeave();
     }
 
     private final BoardPanel board = new BoardPanel();
@@ -19,7 +21,24 @@ public final class GameView extends JPanel {
     private final JTextArea chatArea = new JTextArea();
     private final JTextField chatInput = new JTextField();
     private final JButton sendButton = new JButton("Gửi");
+    private final JButton drawButton = new JButton("Xin hòa");
     private final JButton surrenderButton = new JButton("Đầu hàng");
+    private final JButton leaveButton = new JButton("Về sảnh");
+
+    // Chess clock components & player badges
+    private final JLabel opponentInfoLabel = new JLabel("Đối thủ");
+    private final JLabel playerInfoLabel = new JLabel("Bạn");
+    private final JLabel opponentClockBadge = createClockBadge();
+    private final JLabel playerClockBadge = createClockBadge();
+
+    private boolean isBlitz;
+    private boolean isWhitePlayer;
+    private long playerMs;
+    private long opponentMs;
+    private boolean isWhiteTurn;
+    private boolean clockRunning;
+    private final Timer countdownTimer;
+
     private Listener listener;
 
     public GameView() {
@@ -36,10 +55,27 @@ public final class GameView extends JPanel {
         header.add(kicker, BorderLayout.NORTH);
         header.add(status, BorderLayout.CENTER);
 
-        JPanel boardFrame = new JPanel(new BorderLayout());
-        boardFrame.setBackground(ThemeStyle.PANEL);
+        // Top bar for opponent info & clock
+        JPanel opponentBar = new JPanel(new BorderLayout(8, 0));
+        opponentBar.setOpaque(false);
+        opponentInfoLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
+        opponentInfoLabel.setForeground(ThemeStyle.INK);
+        opponentBar.add(opponentInfoLabel, BorderLayout.WEST);
+        opponentBar.add(opponentClockBadge, BorderLayout.EAST);
+
+        // Bottom bar for current player info & clock
+        JPanel playerBar = new JPanel(new BorderLayout(8, 0));
+        playerBar.setOpaque(false);
+        playerInfoLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
+        playerInfoLabel.setForeground(ThemeStyle.INK);
+        playerBar.add(playerInfoLabel, BorderLayout.WEST);
+        playerBar.add(playerClockBadge, BorderLayout.EAST);
+
+        JPanel boardFrame = ThemeStyle.cardPanel(new BorderLayout(0, 8), ThemeStyle.PANEL);
         boardFrame.setBorder(ThemeStyle.cardBorder(12, 12, 12, 12));
+        boardFrame.add(opponentBar, BorderLayout.NORTH);
         boardFrame.add(board, BorderLayout.CENTER);
+        boardFrame.add(playerBar, BorderLayout.SOUTH);
         boardFrame.setMinimumSize(new Dimension(300, 300));
 
         chatArea.setEditable(false);
@@ -51,14 +87,16 @@ public final class GameView extends JPanel {
         chatArea.setBorder(new EmptyBorder(10, 10, 10, 10));
         ThemeStyle.field(chatInput);
         ThemeStyle.button(sendButton, true);
+        ThemeStyle.button(drawButton, false);
         ThemeStyle.button(surrenderButton, false);
+        ThemeStyle.button(leaveButton, true);
+        leaveButton.setVisible(false); // chỉ hiện khi ván đã kết thúc
 
         JPanel chatInputRow = new JPanel(new BorderLayout(6, 0));
         chatInputRow.setOpaque(false);
         chatInputRow.add(chatInput, BorderLayout.CENTER);
         chatInputRow.add(sendButton, BorderLayout.EAST);
-        JPanel chatCard = new JPanel(new BorderLayout(8, 8));
-        chatCard.setBackground(ThemeStyle.PANEL);
+        JPanel chatCard = ThemeStyle.cardPanel(new BorderLayout(8, 8), ThemeStyle.PANEL);
         chatCard.setBorder(ThemeStyle.cardBorder(12, 12, 12, 12));
         JLabel chatTitle = new JLabel("TRÒ CHUYỆN");
         chatTitle.setForeground(ThemeStyle.MUTED);
@@ -77,9 +115,11 @@ public final class GameView extends JPanel {
         center.setBorder(null);
         center.setOpaque(false);
 
-        JPanel footer = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        JPanel footer = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         footer.setOpaque(false);
+        footer.add(drawButton);
         footer.add(surrenderButton);
+        footer.add(leaveButton);
 
         add(header, BorderLayout.NORTH);
         add(center, BorderLayout.CENTER);
@@ -90,9 +130,126 @@ public final class GameView extends JPanel {
         });
         sendButton.addActionListener(event -> sendChat());
         chatInput.addActionListener(event -> sendChat());
+        drawButton.addActionListener(event -> {
+            if (listener != null) listener.onDrawOffer();
+        });
         surrenderButton.addActionListener(event -> {
             if (listener != null) listener.onSurrender();
         });
+        leaveButton.addActionListener(event -> {
+            if (listener != null) listener.onLeave();
+        });
+
+        // 100ms local tick timer for smooth countdown display
+        countdownTimer = new Timer(100, event -> {
+            if (!isBlitz || !clockRunning) return;
+            boolean myTurn = (isWhitePlayer == isWhiteTurn);
+            if (myTurn) {
+                playerMs = Math.max(0, playerMs - 100);
+            } else {
+                opponentMs = Math.max(0, opponentMs - 100);
+            }
+            updateClockLabels();
+        });
+    }
+
+    private JLabel createClockBadge() {
+        JLabel label = new JLabel("05:00", SwingConstants.CENTER);
+        label.setFont(new Font("Monospaced", Font.BOLD, 17));
+        label.setForeground(ThemeStyle.INK);
+        label.setBackground(Color.WHITE);
+        label.setOpaque(true);
+        label.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(215, 220, 212), 1),
+                new EmptyBorder(4, 12, 4, 12)
+        ));
+        return label;
+    }
+
+    private void updateClockLabels() {
+        playerClockBadge.setText(formatTime(playerMs));
+        opponentClockBadge.setText(formatTime(opponentMs));
+
+        boolean myTurn = (isWhitePlayer == isWhiteTurn);
+        styleClockBadge(playerClockBadge, clockRunning && myTurn);
+        styleClockBadge(opponentClockBadge, clockRunning && !myTurn);
+    }
+
+    private void styleClockBadge(JLabel badge, boolean active) {
+        if (active) {
+            badge.setBackground(new Color(230, 244, 234));
+            badge.setForeground(ThemeStyle.GREEN_DARK);
+            badge.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(ThemeStyle.GREEN, 2),
+                    new EmptyBorder(3, 11, 3, 11)
+            ));
+        } else {
+            badge.setBackground(Color.WHITE);
+            badge.setForeground(ThemeStyle.INK);
+            badge.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(new Color(215, 220, 212), 1),
+                    new EmptyBorder(4, 12, 4, 12)
+            ));
+        }
+    }
+
+    private static String formatTime(long ms) {
+        long totalSec = Math.max(0, (ms + 999) / 1000);
+        long min = totalSec / 60;
+        long sec = totalSec % 60;
+        return String.format("%02d:%02d", min, sec);
+    }
+
+    public void setupMatch(boolean white, String opponent, String opponentElo,
+                           boolean isBlitz, int blitzSeconds, int incrementSeconds) {
+        this.isWhitePlayer = white;
+        this.isBlitz = isBlitz;
+        this.isWhiteTurn = true;
+        this.clockRunning = isBlitz;
+        if (countdownTimer.isRunning()) countdownTimer.stop();
+
+        String myColor = white ? "TRẮNG" : "ĐEN";
+        String oppColor = white ? "ĐEN" : "TRẮNG";
+        playerInfoLabel.setText("Bạn · Quân " + myColor);
+        opponentInfoLabel.setText("Đối thủ: " + opponent + " (Elo: " + opponentElo + ") · Quân " + oppColor);
+
+        if (isBlitz) {
+            long initialMs = (long) (blitzSeconds > 0 ? blitzSeconds : 300) * 1000;
+            playerMs = initialMs;
+            opponentMs = initialMs;
+            opponentClockBadge.setVisible(true);
+            playerClockBadge.setVisible(true);
+            updateClockLabels();
+            countdownTimer.start();
+        } else {
+            opponentClockBadge.setVisible(false);
+            playerClockBadge.setVisible(false);
+        }
+    }
+
+    public void updateClock(long msWhite, long msBlack, boolean whiteTurn, boolean running) {
+        if (!isBlitz) return;
+        this.isWhiteTurn = whiteTurn;
+        this.clockRunning = running;
+        if (isWhitePlayer) {
+            playerMs = msWhite;
+            opponentMs = msBlack;
+        } else {
+            playerMs = msBlack;
+            opponentMs = msWhite;
+        }
+        updateClockLabels();
+        if (this.clockRunning && !countdownTimer.isRunning()) {
+            countdownTimer.start();
+        } else if (!this.clockRunning && countdownTimer.isRunning()) {
+            countdownTimer.stop();
+        }
+    }
+
+    public void stopClock() {
+        clockRunning = false;
+        if (countdownTimer.isRunning()) countdownTimer.stop();
+        if (isBlitz) updateClockLabels();
     }
 
     private void sendChat() {
@@ -108,11 +265,15 @@ public final class GameView extends JPanel {
     public void startBoard(boolean white) {
         board.start(white);
         surrenderButton.setEnabled(true);
+        drawButton.setEnabled(true);
+        setFinished(false);
         chatArea.setText("");
     }
 
     public void applyMove(int fc, int fr, int tc, int tr) {
         board.applyMove(fc, fr, tc, tr);
+        this.isWhiteTurn = isWhitePlayer ? board.isMyTurn() : !board.isMyTurn();
+        updateClockLabels();
     }
 
     public void unlockBoard() {
@@ -142,5 +303,19 @@ public final class GameView extends JPanel {
 
     public void setSurrenderEnabled(boolean enabled) {
         surrenderButton.setEnabled(enabled);
+        drawButton.setEnabled(enabled);
+    }
+
+    /** Ván đã kết thúc: ẩn Xin hòa/Đầu hàng, hiện Về sảnh, khóa ô chat. */
+    public void setFinished(boolean finished) {
+        leaveButton.setVisible(finished);
+        drawButton.setVisible(!finished);
+        surrenderButton.setVisible(!finished);
+        chatInput.setEnabled(!finished);
+        sendButton.setEnabled(!finished);
+    }
+
+    public void setDrawOfferEnabled(boolean enabled) {
+        drawButton.setEnabled(enabled);
     }
 }

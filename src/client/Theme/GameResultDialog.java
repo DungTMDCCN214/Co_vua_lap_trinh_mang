@@ -10,13 +10,15 @@ final class GameResultDialog extends JDialog {
     private static final Color LOSS = new Color(145, 71, 61);
     private static final Color DRAW = new Color(151, 111, 48);
 
+    private boolean toLobby;
+
     GameResultDialog(Window owner, String result, String reason, String details) {
         super(owner, "Kết quả ván đấu", ModalityType.APPLICATION_MODAL);
         Color accent = resultColor(result);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setResizable(false);
 
-        JPanel content = new JPanel(new BorderLayout(0, 16));
+        JPanel content = ThemeStyle.cardPanel(new BorderLayout(0, 16), ThemeStyle.PAPER);
         content.setBackground(ThemeStyle.PAPER);
         content.setBorder(ThemeStyle.cardBorder(18, 18, 18, 18));
 
@@ -48,8 +50,7 @@ final class GameResultDialog extends JDialog {
         banner.add(emblem, BorderLayout.WEST);
         banner.add(titleBlock, BorderLayout.CENTER);
 
-        JPanel detailsCard = new JPanel(new BorderLayout(0, 8));
-        detailsCard.setBackground(Color.WHITE);
+        JPanel detailsCard = ThemeStyle.cardPanel(new BorderLayout(0, 8), Color.WHITE);
         detailsCard.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(0, 4, 0, 0, accent),
                 new EmptyBorder(14, 14, 14, 14)));
@@ -68,11 +69,18 @@ final class GameResultDialog extends JDialog {
         detailsCard.add(label, BorderLayout.NORTH);
         detailsCard.add(detailText, BorderLayout.CENTER);
 
+        JButton viewButton = new JButton("Xem bàn cờ");
         JButton returnButton = new JButton("Về sảnh");
+        ThemeStyle.button(viewButton, false);
         ThemeStyle.button(returnButton, true);
-        returnButton.addActionListener(event -> dispose());
-        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        viewButton.addActionListener(event -> dispose());
+        returnButton.addActionListener(event -> {
+            toLobby = true;
+            dispose();
+        });
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         actions.setOpaque(false);
+        actions.add(viewButton);
         actions.add(returnButton);
 
         content.add(banner, BorderLayout.NORTH);
@@ -83,6 +91,9 @@ final class GameResultDialog extends JDialog {
         setSize(470, 340);
         setLocationRelativeTo(owner);
     }
+
+    /** true nếu người chơi bấm "Về sảnh" (đóng bằng nút khác/X/ESC = ở lại xem bàn cờ). */
+    boolean toLobby() { return toLobby; }
 
     private static Color resultColor(String result) {
         if ("WIN".equals(result)) return WIN;
@@ -106,6 +117,10 @@ final class GameResultDialog extends JDialog {
                 return result.equals("WIN") ? "Đối thủ đã đầu hàng" : "Bạn đã đầu hàng";
             case "DISCONNECT":
                 return result.equals("WIN") ? "Đối thủ mất kết nối" : "Bạn mất kết nối";
+            case "TIMEOUT":
+                return result.equals("WIN") ? "Đối thủ đã hết giờ" : "Bạn đã hết giờ";
+            case "AGREEMENT":
+                return "Hai bên đồng ý hòa";
             default:
                 return result.equals("DRAW") ? "Trận đấu kết thúc với kết quả hòa" : "Trận đấu đã kết thúc";
         }

@@ -27,6 +27,12 @@ public final class LobbyPanel implements LobbyView.Listener {
     }
 
     @Override
+    public void onFindBlitzMatch() {
+        frame.send(Protocol.build(Protocol.FIND_MATCH, Protocol.BLITZ));
+        setSearching(true);
+    }
+
+    @Override
     public void onCancelMatch() {
         frame.send(Protocol.CANCEL_FIND);
         setSearching(false);
@@ -40,6 +46,35 @@ public final class LobbyPanel implements LobbyView.Listener {
     @Override
     public void onProfileRequested() {
         frame.send(Protocol.PROFILE);
+    }
+
+    @Override
+    public void onOnlineListRequested() {
+        frame.send(Protocol.ONLINE_LIST);
+    }
+
+    @Override
+    public void onInvite(String targetName, boolean blitz) {
+        if (blitz) {
+            frame.send(Protocol.build(Protocol.INVITE, targetName, Protocol.BLITZ));
+        } else {
+            frame.send(Protocol.build(Protocol.INVITE, targetName));
+        }
+    }
+
+    @Override
+    public void onAcceptInvite(String inviterName) {
+        frame.send(Protocol.build(Protocol.INVITE_ACCEPT, inviterName));
+    }
+
+    @Override
+    public void onDeclineInvite(String inviterName) {
+        frame.send(Protocol.build(Protocol.INVITE_DECLINE, inviterName));
+    }
+
+    @Override
+    public void onCancelInvite() {
+        frame.send(Protocol.INVITE_CANCEL);
     }
 
     public void setUser(String name, Integer userElo) {
@@ -76,6 +111,40 @@ public final class LobbyPanel implements LobbyView.Listener {
         username = name;
         elo = profileElo;
         view.showProfile(name, profileElo, wins, losses, draws);
+    }
+
+    public void showOnlineList(String[] parts) {
+        view.showOnlineList(parts);
+    }
+
+    public void onInviteSent(String targetName) {
+        view.showWaitingInviteDialog(targetName);
+    }
+
+    public void onInviteReceived(String inviter, String elo, boolean blitz) {
+        view.showIncomingInviteDialog(inviter, elo, blitz);
+    }
+
+    public void onInviteDeclined(String name) {
+        view.onInviteDeclined(name);
+    }
+
+    public void onInviteCancelled(String name) {
+        view.onInviteCancelled(name);
+    }
+
+    public void onInviteExpired(String name) {
+        view.onInviteExpired(name);
+    }
+
+    public void onInviteFailed(String reason) {
+        view.dismissInviteDialogs();
+        view.showError("Mời đấu thất bại: " + reason);
+    }
+
+    public void onMatchFound() {
+        view.dismissInviteDialogs();
+        setSearching(false);
     }
 
     public void showError(String message) {
