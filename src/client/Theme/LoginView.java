@@ -229,6 +229,13 @@ public final class LoginView extends JPanel {
         registerButton.setText(busy ? "Đang gửi..." : "Tạo tài khoản");
     }
 
+    public void clearPasswords() {
+        loginPassword.setText("");
+        registerPassword.setText("");
+        clearStatus(loginStatus);
+        clearStatus(registerStatus);
+    }
+
     public void showLoginPage() {
         formsLayout.show(forms, LOGIN);
     }

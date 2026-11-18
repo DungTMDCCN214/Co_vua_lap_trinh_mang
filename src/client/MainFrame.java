@@ -94,6 +94,17 @@ public final class MainFrame {
         window.showScreen(MainWindow.LOGIN);
     }
 
+    /** Đăng xuất: báo server, đóng kết nối, xóa dữ liệu phiên rồi về màn đăng nhập. */
+    public void logout() {
+        if (!window.confirmLogout()) return;
+        send(Protocol.DISCONNECT);
+        closeClient();
+        waitingForInitialLeaderboard = false;
+        lobby.reset();
+        login.clearPasswords();
+        showLogin();
+    }
+
     public boolean confirmSurrender() { return window.confirmSurrender(); }
     public boolean confirmDrawOffer() { return window.confirmDrawOffer(); }
     public boolean confirmAcceptDraw() { return window.confirmAcceptDraw(); }
@@ -259,7 +270,7 @@ public final class MainFrame {
         waitingForInitialLeaderboard = false;
         game.reset();          // dừng đồng hồ, khóa bàn cờ nếu đang giữa ván
         window.closeDialogs(); // đóng hộp thoại xin hòa/đầu hàng còn mở
-        lobby.onMatchFound();
+        lobby.reset();
         showLogin();
         window.showError("Lỗi mạng", "Mất kết nối đến server.");
     }

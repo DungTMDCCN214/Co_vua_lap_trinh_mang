@@ -30,6 +30,7 @@ public final class LobbyView extends JPanel {
         void onAcceptInvite(String inviterName);
         void onDeclineInvite(String inviterName);
         void onCancelInvite();
+        void onLogout();
     }
 
     private static final String TAB_LOBBY = "Sảnh chờ";
@@ -169,6 +170,17 @@ public final class LobbyView extends JPanel {
 
         sidebar.add(topSection, BorderLayout.NORTH);
         sidebar.add(navItemsPanel, BorderLayout.CENTER);
+
+        JButton logoutBtn = new JButton("Đăng xuất");
+        ThemeStyle.outlineButton(logoutBtn);
+        logoutBtn.addActionListener(e -> {
+            if (listener != null) listener.onLogout();
+        });
+        JPanel logoutPanel = new JPanel(new BorderLayout());
+        logoutPanel.setOpaque(false);
+        logoutPanel.setBorder(new EmptyBorder(12, 16, 16, 16));
+        logoutPanel.add(logoutBtn, BorderLayout.CENTER);
+        sidebar.add(logoutPanel, BorderLayout.SOUTH);
         return sidebar;
     }
 
@@ -1045,6 +1057,35 @@ public final class LobbyView extends JPanel {
             findNormalBtn.setText("Tìm cờ thường");
             findBlitzBtn.setText("Tìm cờ chớp");
         }
+    }
+
+    /** Xóa sạch dữ liệu của phiên hiện tại (đăng xuất / mất kết nối) để lần đăng nhập sau không còn dữ liệu cũ. */
+    public void reset() {
+        dismissInviteDialogs();
+        setSearching(false);
+        currentUsername = "";
+        userElo = null;
+        userRank = -1;
+        onlineUsers.clear();
+        leaderboard.clear();
+        searchField.setText("");
+        renderOnlineList();
+        renderLeaderboard();
+
+        sidebarUsername.setText("Chưa đăng nhập");
+        sidebarElo.setText("Elo -");
+        updateAvatarLetter(userAvatar, "");
+        lobbyWelcome.setText("Xin chào, Người chơi");
+        profileNameLabel.setText(" ");
+        profileEloLabel.setText("-");
+        updateAvatarLetter(profileAvatar, "");
+        winCountLabel.setText("0");
+        drawCountLabel.setText("0");
+        lossCountLabel.setText("0");
+        totalGamesValueLabel.setText("0");
+        totalGamesLabel.setText("Tổng số ván đã đấu: 0");
+        updateLobbyStats();
+        selectTab(TAB_LOBBY, false);
     }
 
     public void showError(String message) {

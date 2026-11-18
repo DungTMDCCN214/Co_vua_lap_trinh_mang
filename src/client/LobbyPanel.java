@@ -77,6 +77,19 @@ public final class LobbyPanel implements LobbyView.Listener {
         frame.send(Protocol.INVITE_CANCEL);
     }
 
+    @Override
+    public void onLogout() {
+        frame.logout();
+    }
+
+    /** Xóa dữ liệu phiên hiện tại (đăng xuất / mất kết nối). */
+    public void reset() {
+        username = null;
+        elo = null;
+        accountMode = false;
+        view.reset();
+    }
+
     public void setUser(String name, Integer userElo) {
         username = name;
         elo = userElo;
