@@ -59,6 +59,7 @@ public final class LoginPanel implements LoginView.Listener {
     }
 
     public void setBusy(boolean busy) { view.setBusy(busy); }
+    public void clearPasswords() { view.clearPasswords(); }
     public void showLoginPage() { view.showLoginPage(); }
     public void showError(String message) { view.showError(message); }
     public void showRegisterError(String message) { view.showRegisterError(message); }

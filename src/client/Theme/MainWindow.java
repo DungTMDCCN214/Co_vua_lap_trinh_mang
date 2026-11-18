@@ -1,15 +1,15 @@
 package client.Theme;
 
 import javax.swing.*;
-import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
 
-/** Desktop window and screen navigation; application behavior remains in client controllers. */
+/**
+ * Cửa sổ chính dùng khung gốc của hệ điều hành (thanh tiêu đề, kéo giãn, chia đôi/chia 4 màn hình
+ * của Windows hoạt động bình thường). Hành vi ứng dụng nằm ở các controller trong package client.
+ */
 public final class MainWindow extends JFrame {
     public static final String LOGIN = "LOGIN";
     public static final String LOBBY = "LOBBY";
@@ -17,26 +17,17 @@ public final class MainWindow extends JFrame {
 
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel screens = new JPanel(cardLayout);
-    private Point dragOffset;
-    private Rectangle restoreBounds;
-    private JButton maximizeButton;
 
     public MainWindow(Component login, Component lobby, Component game, Runnable onClose) {
         super("Khai Cuộc | Cờ vua online");
-        setUndecorated(true);
         setIconImage(createAppIcon());
 
         screens.setBackground(ThemeStyle.PAPER);
         screens.add(login, LOGIN);
         screens.add(lobby, LOBBY);
         screens.add(game, GAME);
+        setContentPane(screens);
 
-        JPanel root = new JPanel(new BorderLayout());
-        root.setBackground(ThemeStyle.PAPER);
-        root.setBorder(BorderFactory.createLineBorder(ThemeStyle.LINE));
-        root.add(createTitleBar(onClose), BorderLayout.NORTH);
-        root.add(screens, BorderLayout.CENTER);
-        setContentPane(root);
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
             @Override
@@ -51,165 +42,6 @@ public final class MainWindow extends JFrame {
                 Math.max(560, Math.min(760, screen.height - 80))
         );
         setLocationRelativeTo(null);
-    }
-
-    private JPanel createTitleBar(Runnable onClose) {
-        JPanel titleBar = new JPanel(new BorderLayout());
-        titleBar.setBackground(ThemeStyle.GREEN_DARK);
-        titleBar.setBorder(new EmptyBorder(0, 10, 0, 0));
-        titleBar.setPreferredSize(new Dimension(0, 38));
-
-        Image titleIcon = createAppIcon().getScaledInstance(24, 24, Image.SCALE_SMOOTH);
-        JLabel icon = new JLabel(new ImageIcon(titleIcon));
-        icon.setBorder(new EmptyBorder(0, 0, 0, 8));
-        JLabel title = new JLabel("KHAI CUỘC  ·  CỜ VUA ONLINE");
-        title.setForeground(Color.WHITE);
-        title.setFont(new Font("SansSerif", Font.BOLD, 12));
-
-        JPanel brand = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        brand.setOpaque(false);
-        brand.add(icon);
-        brand.add(title);
-        titleBar.add(brand, BorderLayout.WEST);
-
-        JButton minimizeButton = createTitleButton(TitleBarButton.MINIMIZE, "Thu nhỏ");
-        maximizeButton = createTitleButton(TitleBarButton.MAXIMIZE, "Phóng to");
-        JButton closeButton = createTitleButton(TitleBarButton.CLOSE, "Đóng");
-        closeButton.addActionListener(event -> onClose.run());
-        minimizeButton.addActionListener(event -> setState(Frame.ICONIFIED));
-        maximizeButton.addActionListener(event -> toggleMaximized());
-
-        JPanel controls = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
-        controls.setOpaque(false);
-        controls.add(minimizeButton);
-        controls.add(maximizeButton);
-        controls.add(closeButton);
-        titleBar.add(controls, BorderLayout.EAST);
-
-        MouseAdapter dragHandler = new MouseAdapter() {
-            @Override
-            public void mousePressed(MouseEvent event) {
-                if (event.getButton() == MouseEvent.BUTTON1 && !isMaximized()) {
-                    dragOffset = event.getLocationOnScreen();
-                    Point location = getLocation();
-                    dragOffset.translate(-location.x, -location.y);
-                }
-            }
-
-            @Override
-            public void mouseDragged(MouseEvent event) {
-                if (dragOffset != null && !isMaximized()) {
-                    Point location = event.getLocationOnScreen();
-                    setLocation(location.x - dragOffset.x, location.y - dragOffset.y);
-                }
-            }
-
-            @Override
-            public void mouseReleased(MouseEvent event) {
-                dragOffset = null;
-            }
-
-            @Override
-            public void mouseClicked(MouseEvent event) {
-                if (event.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(event)) {
-                    toggleMaximized();
-                }
-            }
-        };
-        titleBar.addMouseListener(dragHandler);
-        titleBar.addMouseMotionListener(dragHandler);
-        brand.addMouseListener(dragHandler);
-        brand.addMouseMotionListener(dragHandler);
-        title.addMouseListener(dragHandler);
-        title.addMouseMotionListener(dragHandler);
-        icon.addMouseListener(dragHandler);
-        icon.addMouseMotionListener(dragHandler);
-
-        addWindowStateListener(event -> updateMaximizeButton());
-        return titleBar;
-    }
-
-    private JButton createTitleButton(int type, String tooltip) {
-        JButton button = new TitleBarButton(type);
-        button.setToolTipText(tooltip);
-        return button;
-    }
-
-    private void toggleMaximized() {
-        if (isMaximized()) {
-            setExtendedState(Frame.NORMAL);
-            if (restoreBounds != null) setBounds(restoreBounds);
-        } else {
-            restoreBounds = getBounds();
-            GraphicsConfiguration gc = getGraphicsConfiguration(); // không che thanh taskbar
-            if (gc != null) {
-                Rectangle b = gc.getBounds();
-                Insets in = Toolkit.getDefaultToolkit().getScreenInsets(gc);
-                setMaximizedBounds(new Rectangle(in.left, in.top,
-                        b.width - in.left - in.right, b.height - in.top - in.bottom));
-            }
-            setExtendedState(Frame.MAXIMIZED_BOTH);
-        }
-        updateMaximizeButton();
-    }
-
-    private boolean isMaximized() {
-        return (getExtendedState() & Frame.MAXIMIZED_BOTH) == Frame.MAXIMIZED_BOTH;
-    }
-
-    private void updateMaximizeButton() {
-        if (maximizeButton == null) return;
-        maximizeButton.repaint();
-        maximizeButton.setToolTipText(isMaximized() ? "Khôi phục" : "Phóng to");
-    }
-
-    private final class TitleBarButton extends JButton {
-        private static final int MINIMIZE = 0;
-        private static final int MAXIMIZE = 1;
-        private static final int CLOSE = 2;
-        private final int type;
-
-        private TitleBarButton(int type) {
-            this.type = type;
-            setPreferredSize(new Dimension(46, 38));
-            setBorderPainted(false);
-            setFocusPainted(false);
-            setContentAreaFilled(false);
-            setOpaque(false);
-            setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        }
-
-        @Override
-        protected void paintComponent(Graphics graphics) {
-            Graphics2D g = (Graphics2D) graphics.create();
-            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-            if (getModel().isPressed()) {
-                g.setColor(type == CLOSE ? ThemeStyle.DANGER_DARK : new Color(38, 58, 47));
-                g.fillRect(0, 0, getWidth(), getHeight());
-            } else if (getModel().isRollover()) {
-                g.setColor(type == CLOSE ? ThemeStyle.DANGER : new Color(65, 92, 75));
-                g.fillRect(0, 0, getWidth(), getHeight());
-            }
-
-            g.setColor(new Color(245, 248, 245));
-            g.setStroke(new BasicStroke(1.2f));
-            int cx = getWidth() / 2;
-            int cy = getHeight() / 2;
-            if (type == MINIMIZE) {
-                g.drawLine(cx - 5, cy + 3, cx + 5, cy + 3);
-            } else if (type == MAXIMIZE && isMaximized()) {
-                g.drawRect(cx - 4, cy - 3, 8, 8);
-                g.drawLine(cx - 2, cy - 5, cx + 5, cy - 5);
-                g.drawLine(cx + 5, cy - 5, cx + 5, cy + 2);
-            } else if (type == MAXIMIZE) {
-                g.drawRect(cx - 5, cy - 5, 10, 10);
-            } else {
-                g.drawLine(cx - 4, cy - 4, cx + 4, cy + 4);
-                g.drawLine(cx + 4, cy - 4, cx - 4, cy + 4);
-            }
-            g.dispose();
-        }
     }
 
     private static Image createAppIcon() {
@@ -276,6 +108,11 @@ public final class MainWindow extends JFrame {
     public boolean confirmAcceptDraw() {
         return confirmDialog("Lời đề nghị hòa", "Đề nghị hòa cờ",
                 "Đối thủ gửi lời đề nghị hòa cờ. Bạn có đồng ý kết thúc ván đấu với kết quả hòa không?", "Đồng ý hòa", "Từ chối", false, "½", ThemeStyle.GOLD);
+    }
+
+    public boolean confirmLogout() {
+        return confirmDialog("Đăng xuất", "Xác nhận đăng xuất",
+                "Bạn có chắc chắn muốn đăng xuất?", "Đăng xuất", "Ở lại", true, "!", ThemeStyle.DANGER);
     }
 
     public boolean confirmDialog(String title, String headingText, String message,
